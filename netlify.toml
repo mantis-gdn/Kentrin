@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "http://kentrin.com/*"
+  to = "https://kentrin.com/:splat"
+  status = 301
+  force = true
