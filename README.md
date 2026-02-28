@@ -19,83 +19,81 @@ monetary base layer.
 
 ------------------------------------------------------------------------
 
-## Core Principles
+## Core Idea
 
-### 1. Deterministic Issuance
+Most modern digital monetary systems rely on incentives, competition,
+and governance votes.
 
-Kentrin supply expansion follows a predefined mathematical emission
-curve.
+Kentrin relies on structure.
 
--   No discretionary printing\
--   No governance voting\
--   No inflation toggles\
--   No human overrides
+Issuance follows a predefined mathematical schedule.\
+Time governs expansion.\
+Rules are fixed and transparent.
 
-Issuance is governed by formula, not policy.
+There are no discretionary adjustments.\
+No inflation toggles.\
+No policy committees.
 
-The emission function is transparent, auditable, and time-bound.
-
-------------------------------------------------------------------------
-
-### 2. Constitutional Structure
-
-Kentrin operates under a fixed constitutional rule set.
-
-The Constitution defines:
-
--   Emission mechanics\
--   Validation requirements\
--   Clearing behavior\
--   Serial formatting\
--   Denomination structure\
--   Settlement logic
-
-Amendments are not dynamic.\
-The base layer is intentionally rigid.
-
-Stability is derived from immutability.
+Money expands because time advances.
 
 ------------------------------------------------------------------------
 
-### 3. Federated Clearing
+## Deterministic Issuance
+
+Kentrin supply increases at a predictable rate over fixed time epochs.
+
+-   Issuance is integer-based.\
+-   Expansion is linear and perpetual.\
+-   The emission rule is immutable.
+
+Total supply at any moment can be calculated directly from time alone.
+
+------------------------------------------------------------------------
+
+## Federated Clearing
 
 Kentrin separates issuance from clearing.
 
-Issuance is deterministic and singular.\
+Issuance is singular and deterministic.\
 Clearing is federated and distributed.
 
-Clearing nodes:
+Independent clearing participants operate under shared constitutional
+rules without relying on:
 
--   Track serial-based units\
--   Validate transfers\
--   Enforce constitutional compliance\
--   Operate independently within defined rule constraints
+-   Mining
+-   Staking
+-   Block rewards
+-   Global chain competition
 
-No global mining race.\
-No staking cartels.\
-No block reward politics.
+This architecture prioritizes structural stability over economic game
+theory.
 
 ------------------------------------------------------------------------
 
-### 4. Serial-Based Monetary Units
+## Time Attestation Framework
 
-Each Kentrin unit is defined by:
+Because issuance is time-based, Kentrin relies on a federated network of
+Time Attestors.
 
--   Public serial structure\
--   Deterministic origin timestamp\
--   Verifiable issuance index
+-   Nine independent Time Attestors operate under constitutional rules.\
+-   Epoch recognition requires a 5-of-9 quorum.\
+-   Attestations are cryptographically signed.\
+-   Time proofs are mandatory and verifiable.
 
-Private key control governs ownership.
+There is no global blockchain ledger.\
+There is no chain of blocks.\
+Only signed, proof-backed time validation.
 
-Public serial visibility enables auditability without exposing
-ownership.
+------------------------------------------------------------------------
 
-This structure allows:
+## Design Principles
 
--   Direct spend tracking\
--   Deterministic splits\
--   Structured denomination behavior\
--   Regulatory-grade clarity without surveillance
+Kentrin is built on the following foundations:
+
+-   Constitutional structure over governance politics\
+-   Deterministic mathematics over discretion\
+-   Transparency over speculation\
+-   Stability over hype
 
 ------------------------------------------------------------------------
 
@@ -109,96 +107,8 @@ Kentrin is not:
 -   A speculative pump vehicle\
 -   A blockchain fork
 
-It does not rely on proof-of-work or proof-of-stake.
-
-It does not depend on inflationary reward cycles.
-
-It does not require constant network competition to survive.
-
-------------------------------------------------------------------------
-
-## Emission Framework (Conceptual)
-
-Total supply over time is governed by a deterministic function:
-
-S(t) = f(t)
-
-Where: - t = time index\
-- S(t) = cumulative issuance\
-- f(t) = predefined emission curve
-
-The emission curve is:
-
--   Public\
--   Finite or asymptotic (to be defined)\
--   Immutable
-
-No discretionary acceleration.
-
-------------------------------------------------------------------------
-
-## Architectural Separation
-
-Kentrin is composed of three layers:
-
-1.  Constitutional Layer (Rules)\
-2.  Issuance Engine (Mathematics)\
-3.  Clearing Federation (Execution)
-
-This separation ensures:
-
--   Mathematical integrity\
--   Operational scalability\
--   Institutional compatibility
-
-------------------------------------------------------------------------
-
-## Intended Use Cases
-
-Kentrin is designed for:
-
--   National monetary backbones\
--   Sovereign settlement rails\
--   Direct issuance systems\
--   Structured public spending models\
--   Transparent fiscal tracking frameworks
-
-It is engineered for governments, institutions, and constitutional
-financial systems --- not retail speculation.
-
-------------------------------------------------------------------------
-
-## Design Philosophy
-
-Modern cryptocurrencies prioritize incentives.
-
-Kentrin prioritizes structure.
-
-Modern systems rely on economic game theory.
-
-Kentrin relies on constitutional mathematics.
-
-Modern tokens are reactive.
-
-Kentrin is predetermined.
-
-------------------------------------------------------------------------
-
-## Development Status
-
-Current Phase:
-
--   Constitutional drafting\
--   Emission curve modeling\
--   Serial architecture design\
--   Clearing framework simulation
-
-Next Phase:
-
--   Mathematical emission specification\
--   Reference clearing node implementation\
--   Deterministic issuance simulator\
--   Formal constitutional publication
+It does not depend on inflationary reward cycles.\
+It does not require continuous network competition to function.
 
 ------------------------------------------------------------------------
 
@@ -208,7 +118,6 @@ Kentrin is an attempt to define money as law-bound mathematics.
 
 Not mined.\
 Not voted.\
-Not inflated.\
 Not gamified.
 
 Structured.\
