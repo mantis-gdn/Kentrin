@@ -1,6 +1,7 @@
 [build]
+  command = "npm run build"
   publish = "."
-
+  
 [[redirects]]
   from = "http://kentrin.com/*"
   to = "https://kentrin.com/:splat"
