@@ -91,7 +91,7 @@ and sends it to your Netlify verification endpoint.
 <pre id="output">Output will appear here...</pre>
 
 <script>
-const $ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id.startsWith("#") ? id.slice(1) : id);
 
 let keypair = null;
 let lastTimestamp = null;
