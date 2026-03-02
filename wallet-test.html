@@ -65,8 +65,8 @@
 
 <h1>Kentrin Wallet Test</h1>
 <div class="small">
-Generates an Ed25519 keypair in your browser, signs a KU transfer message,
-and sends it to your Netlify verification endpoint.
+Generates an Ed25519 keypair in your browser, derives a KU address from the public key,
+signs a KU transfer message, and sends it to your Netlify verification endpoint.
 </div>
 
 <button id="btnGen">1) Generate Keypair</button>
@@ -78,8 +78,8 @@ and sends it to your Netlify verification endpoint.
 </div>
 
 <div class="row">
-  <input id="fromAddr" placeholder="from (address string)" value="ADDR_A" />
-  <input id="toAddr" placeholder="to (address string)" value="ADDR_B" />
+  <input id="fromAddr" placeholder="from (KU address)" value="" />
+  <input id="toAddr" placeholder="to (KU address)" value="" />
 </div>
 
 <button id="btnSign">2) Sign Message</button>
@@ -120,6 +120,22 @@ async function exportPublicKeyPem(publicKey) {
   return base64ToPem(b64, "PUBLIC KEY");
 }
 
+// --- NEW: SHA256 + KU address derivation (hash-based, deterministic) ---
+async function sha256Hex(bytes) {
+  const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return hashArr.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function deriveKUAddress(publicKey) {
+  // Canonical public key encoding: SPKI bytes
+  const spki = await crypto.subtle.exportKey("spki", publicKey);
+  const hex = await sha256Hex(spki);
+
+  // Keep it short for now (20 bytes / 40 hex chars)
+  return "KU1" + hex.slice(0, 40);
+}
+
 function nowUnix() {
   return Math.floor(Date.now() / 1000);
 }
@@ -135,7 +151,14 @@ $("#btnGen").addEventListener("click", async () => {
     const pem = await exportPublicKeyPem(keypair.publicKey);
     $("#pubPem").value = pem;
 
-    $("#output").textContent = "Keypair generated successfully.";
+    // --- NEW: auto-derive and set KU addresses ---
+    const fromKU = await deriveKUAddress(keypair.publicKey);
+    $("#fromAddr").value = fromKU;
+
+    // placeholder "to" address (overwrite as needed)
+    $("#toAddr").value = "KU1" + "0".repeat(40);
+
+    $("#output").textContent = `Keypair generated. KU address set:\n${fromKU}`;
   } catch (err) {
     $("#output").textContent = "Key generation error: " + err.message;
   }
@@ -151,6 +174,9 @@ $("#btnSign").addEventListener("click", async () => {
     const nonce = $("#nonce").value.trim();
     const ts = nowUnix();
     lastTimestamp = ts;
+
+    if (!from.startsWith("KU1")) throw new Error("from address must start with KU1");
+    if (!to.startsWith("KU1")) throw new Error("to address must start with KU1");
 
     const message = canonicalTransferMessage({ note_id, from, to, ts, nonce });
     $("#canonical").value = message;
