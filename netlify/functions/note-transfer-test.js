@@ -25,13 +25,8 @@ function sha256HexStr(s) {
 }
 
 function deriveKUAddressFromPublicKeyPem(publicKeyPem) {
-  // Parse PEM to KeyObject
   const keyObj = crypto.createPublicKey(publicKeyPem);
-
-  // Export canonical SPKI DER bytes (same basis your browser uses)
   const spkiDer = keyObj.export({ type: "spki", format: "der" });
-
-  // Hash SPKI bytes and take first 20 bytes (40 hex chars)
   const hex = sha256HexBuf(spkiDer);
   return "KU1" + hex.slice(0, 40);
 }
@@ -48,7 +43,7 @@ exports.handler = async (event) => {
     return json(400, { error: "Invalid JSON body" });
   }
 
-  const {
+  let {
     note_id,
     from,
     to,
@@ -74,6 +69,36 @@ exports.handler = async (event) => {
     return json(400, { error: "Missing fields", missing });
   }
 
+  // --- NEW: enforce note_id is sha256 hex (64 chars) ---
+  if (typeof note_id !== "string") {
+    return json(400, { error: "INVALID_NOTE_ID_TYPE", hint: "note_id must be a string" });
+  }
+  note_id = note_id.trim().toLowerCase();
+
+  if (!/^[a-f0-9]{64}$/.test(note_id)) {
+    return json(400, {
+      error: "INVALID_NOTE_ID",
+      hint: "note_id must be 64 hex chars (sha256).",
+      note_id,
+    });
+  }
+
+  // Optional sanity checks for address format
+  if (typeof from !== "string" || !from.startsWith("KU1") || from.length !== 43) {
+    return json(400, {
+      error: "INVALID_FROM_ADDRESS",
+      hint: "from must look like KU1 + 40 hex chars (length 43).",
+      from,
+    });
+  }
+  if (typeof to !== "string" || !to.startsWith("KU1") || to.length !== 43) {
+    return json(400, {
+      error: "INVALID_TO_ADDRESS",
+      hint: "to must look like KU1 + 40 hex chars (length 43).",
+      to,
+    });
+  }
+
   // STRICT MODE: derive address from public key and require it matches "from"
   let derived_from_address = null;
   try {
@@ -91,7 +116,7 @@ exports.handler = async (event) => {
     });
   }
 
-  // Build canonical message
+  // Build canonical message (use normalized note_id)
   const message = canonicalTransferMessage({ note_id, from, to, ts, nonce });
 
   // Verify signature (Ed25519)

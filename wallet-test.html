@@ -66,14 +66,14 @@
 <h1>Kentrin Wallet Test</h1>
 <div class="small">
 Generates an Ed25519 keypair in your browser, derives a KU address from the public key,
-signs a KU transfer message, and sends it to your Netlify verification endpoint.
+mints a hash-based note_id (test bill), signs a KU transfer message, and sends it to your Netlify verification endpoint.
 </div>
 
 <button id="btnGen">1) Generate Keypair</button>
 <textarea id="pubPem" rows="6" placeholder="Public Key PEM"></textarea>
 
 <div class="row">
-  <input id="noteId" placeholder="note_id" value="abc123" />
+  <input id="noteId" placeholder="note_id (sha256 hex)" value="" />
   <input id="nonce" placeholder="nonce" value="random-123" />
 </div>
 
@@ -103,9 +103,7 @@ function canonicalTransferMessage({ note_id, from, to, ts, nonce }) {
 function bufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
 
@@ -120,20 +118,30 @@ async function exportPublicKeyPem(publicKey) {
   return base64ToPem(b64, "PUBLIC KEY");
 }
 
-// --- NEW: SHA256 + KU address derivation (hash-based, deterministic) ---
+// --- SHA256 helpers ---
 async function sha256Hex(bytes) {
   const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
   const hashArr = Array.from(new Uint8Array(hashBuf));
   return hashArr.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function sha256HexFromString(s) {
+  const buf = new TextEncoder().encode(s);
+  return await sha256Hex(buf);
+}
+
+// --- KU address derivation (hash-based, deterministic) ---
 async function deriveKUAddress(publicKey) {
-  // Canonical public key encoding: SPKI bytes
   const spki = await crypto.subtle.exportKey("spki", publicKey);
   const hex = await sha256Hex(spki);
+  return "KU1" + hex.slice(0, 40); // 20 bytes
+}
 
-  // Keep it short for now (20 bytes / 40 hex chars)
-  return "KU1" + hex.slice(0, 40);
+// --- NEW: hash-based note_id minting (test bill serial) ---
+async function mintNoteId({ genesis, epoch_index, denom, owner_address, mint_nonce }) {
+  // Canonical mint string: deterministic + tamper-resistant
+  const canonical = `KU|v1|MINT|${genesis}|${epoch_index}|${denom}|${owner_address}|${mint_nonce}`;
+  return await sha256HexFromString(canonical); // 64 hex chars
 }
 
 function nowUnix() {
@@ -151,14 +159,34 @@ $("#btnGen").addEventListener("click", async () => {
     const pem = await exportPublicKeyPem(keypair.publicKey);
     $("#pubPem").value = pem;
 
-    // --- NEW: auto-derive and set KU addresses ---
+    // derive addresses
     const fromKU = await deriveKUAddress(keypair.publicKey);
     $("#fromAddr").value = fromKU;
 
-    // placeholder "to" address (overwrite as needed)
+    // placeholder to-address (overwrite if you want)
     $("#toAddr").value = "KU1" + "0".repeat(40);
 
-    $("#output").textContent = `Keypair generated. KU address set:\n${fromKU}`;
+    // --- NEW: auto-mint a test note_id (hash-based bill serial) ---
+    const GENESIS = 1704067200; // placeholder genesis (change later to your real genesis)
+    const EPOCH_INDEX = 0;      // placeholder epoch index for testing
+    const DENOM = 10;           // fixed denomination bill (10 KU) for testing
+    const mint_nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
+
+    const note_id = await mintNoteId({
+      genesis: GENESIS,
+      epoch_index: EPOCH_INDEX,
+      denom: DENOM,
+      owner_address: fromKU,
+      mint_nonce
+    });
+
+    $("#noteId").value = note_id;
+
+    $("#output").textContent =
+      `Keypair generated.\n` +
+      `KU address: ${fromKU}\n` +
+      `Minted test bill note_id (sha256): ${note_id}\n` +
+      `Denom: ${DENOM} KU`;
   } catch (err) {
     $("#output").textContent = "Key generation error: " + err.message;
   }
@@ -168,13 +196,14 @@ $("#btnSign").addEventListener("click", async () => {
   try {
     if (!keypair) throw new Error("Generate keypair first.");
 
-    const note_id = $("#noteId").value.trim();
+    const note_id = $("#noteId").value.trim().toLowerCase();
     const from = $("#fromAddr").value.trim();
     const to = $("#toAddr").value.trim();
     const nonce = $("#nonce").value.trim();
     const ts = nowUnix();
     lastTimestamp = ts;
 
+    if (!/^[a-f0-9]{64}$/.test(note_id)) throw new Error("note_id must be 64 hex chars (sha256).");
     if (!from.startsWith("KU1")) throw new Error("from address must start with KU1");
     if (!to.startsWith("KU1")) throw new Error("to address must start with KU1");
 
@@ -188,7 +217,6 @@ $("#btnSign").addEventListener("click", async () => {
     );
 
     $("#sigB64").value = bufferToBase64(signature);
-
     $("#output").textContent = "Message signed.";
   } catch (err) {
     $("#output").textContent = "Signing error: " + err.message;
@@ -200,7 +228,7 @@ $("#btnSend").addEventListener("click", async () => {
     if (!keypair) throw new Error("Generate keypair first.");
 
     const body = {
-      note_id: $("#noteId").value.trim(),
+      note_id: $("#noteId").value.trim().toLowerCase(),
       from: $("#fromAddr").value.trim(),
       to: $("#toAddr").value.trim(),
       ts: lastTimestamp ?? nowUnix(),
