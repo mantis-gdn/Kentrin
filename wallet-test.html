@@ -68,7 +68,7 @@
 <h1>Kentrin Wallet Test</h1>
 <div class="small">
 Generates an Ed25519 keypair in your browser, derives a KU address from the public key,
-requests a server-side treasury mint, signs a KU transfer message, and sends it to your Netlify verification endpoint.
+requests a server-side treasury mint, signs a KU transfer message, and submits it to the permanent ledger endpoint.
 </div>
 
 <button id="btnGen">1) Generate Keypair</button>
@@ -90,7 +90,7 @@ requests a server-side treasury mint, signs a KU transfer message, and sends it 
 <textarea id="canonical" rows="3" placeholder="Canonical message"></textarea>
 <textarea id="sigB64" rows="3" placeholder="Signature (base64)"></textarea>
 
-<button id="btnSend">4) Send to Server</button>
+<button id="btnSend">4) Send to Ledger</button>
 
 <pre id="output">Output will appear here...</pre>
 
@@ -168,7 +168,6 @@ $("#btnGen").addEventListener("click", async () => {
 
     $("#toAddr").value = "KU1" + "0".repeat(40);
 
-    // local fallback note_id so the page has something immediately
     const mint_nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
     const note_id = await mintNoteId({
       genesis: GENESIS,
@@ -232,7 +231,7 @@ $("#btnMint").addEventListener("click", async () => {
       `Denom: ${data.denom}\n` +
       `note_id: ${data.note_id}\n` +
       `mint_txid: ${data.mint_txid}\n\n` +
-      `You can now sign and send this bill.`;
+      `You can now sign and send this bill to the ledger.`;
   } catch (err) {
     $("#output").textContent = "Mint error: " + err.message;
   }
@@ -275,6 +274,7 @@ $("#btnSend").addEventListener("click", async () => {
 
     const body = {
       note_id: $("#noteId").value.trim().toLowerCase(),
+      denom: DENOM,
       from: $("#fromAddr").value.trim(),
       to: $("#toAddr").value.trim(),
       ts: lastTimestamp ?? nowUnix(),
@@ -283,7 +283,7 @@ $("#btnSend").addEventListener("click", async () => {
       signature_b64: $("#sigB64").value.trim()
     };
 
-    const response = await fetch("/.netlify/functions/note-transfer-test", {
+    const response = await fetch("/.netlify/functions/ledger-submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
