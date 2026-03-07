@@ -32,12 +32,10 @@ function mintCanonical({ genesis, epoch_index, denom, owner_address, mint_nonce 
 }
 
 exports.handler = async (event) => {
-
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Use POST" });
   }
 
-  // Server-side protection check
   if (!process.env.TREASURY_MINT_SECRET) {
     return json(500, {
       error: "TREASURY_MINT_SECRET missing on server"
@@ -62,7 +60,9 @@ exports.handler = async (event) => {
   const missing = [];
 
   for (const k of ["to_public_key_pem", "denom", "epoch_index", "genesis"]) {
-    if (!payload[k]) missing.push(k);
+    if (payload[k] === undefined || payload[k] === null || payload[k] === "") {
+      missing.push(k);
+    }
   }
 
   if (missing.length) {
@@ -82,13 +82,15 @@ exports.handler = async (event) => {
 
   if (!Number.isInteger(epochInt) || epochInt < 0) {
     return json(400, {
-      error: "INVALID_EPOCH_INDEX"
+      error: "INVALID_EPOCH_INDEX",
+      hint: "epoch_index must be an integer >= 0"
     });
   }
 
   if (!/^\d+$/.test(genesisStr)) {
     return json(400, {
-      error: "INVALID_GENESIS"
+      error: "INVALID_GENESIS",
+      hint: "genesis must be unix seconds as digits"
     });
   }
 
@@ -103,7 +105,6 @@ exports.handler = async (event) => {
     });
   }
 
-  // Random mint nonce
   const mint_nonce = crypto.randomBytes(16).toString("hex");
 
   const canonical = mintCanonical({
@@ -115,10 +116,7 @@ exports.handler = async (event) => {
   });
 
   const note_id = sha256HexStr(canonical);
-
-  const mint_txid = sha256HexStr(
-    `KU|v1|MINT_TX|${canonical}`
-  );
+  const mint_txid = sha256HexStr(`KU|v1|MINT_TX|${canonical}`);
 
   return json(200, {
     ok: true,
@@ -131,5 +129,4 @@ exports.handler = async (event) => {
     mint_nonce,
     canonical_mint: canonical
   });
-
 };
