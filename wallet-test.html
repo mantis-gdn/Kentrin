@@ -9,7 +9,7 @@
     body {
       background: #000;
       color: #e6e6e6;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       padding: 24px;
       max-width: 900px;
       margin: auto;
@@ -57,6 +57,8 @@
       padding: 12px;
       border-radius: 12px;
       overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -66,10 +68,12 @@
 <h1>Kentrin Wallet Test</h1>
 <div class="small">
 Generates an Ed25519 keypair in your browser, derives a KU address from the public key,
-mints a hash-based note_id (test bill), signs a KU transfer message, and sends it to your Netlify verification endpoint.
+requests a server-side treasury mint, signs a KU transfer message, and sends it to your Netlify verification endpoint.
 </div>
 
 <button id="btnGen">1) Generate Keypair</button>
+<button id="btnMint">2) Treasury Mint Test Bill</button>
+
 <textarea id="pubPem" rows="6" placeholder="Public Key PEM"></textarea>
 
 <div class="row">
@@ -82,11 +86,11 @@ mints a hash-based note_id (test bill), signs a KU transfer message, and sends i
   <input id="toAddr" placeholder="to (KU address)" value="" />
 </div>
 
-<button id="btnSign">2) Sign Message</button>
+<button id="btnSign">3) Sign Message</button>
 <textarea id="canonical" rows="3" placeholder="Canonical message"></textarea>
 <textarea id="sigB64" rows="3" placeholder="Signature (base64)"></textarea>
 
-<button id="btnSend">3) Send to Server</button>
+<button id="btnSend">4) Send to Server</button>
 
 <pre id="output">Output will appear here...</pre>
 
@@ -95,6 +99,10 @@ const $ = (id) => document.getElementById(id.startsWith("#") ? id.slice(1) : id)
 
 let keypair = null;
 let lastTimestamp = null;
+
+const GENESIS = 1704067200;
+const EPOCH_INDEX = 0;
+const DENOM = 10;
 
 function canonicalTransferMessage({ note_id, from, to, ts, nonce }) {
   return `KU|v1|TRANSFER|${note_id}|${from}|${to}|${ts}|${nonce}`;
@@ -118,7 +126,6 @@ async function exportPublicKeyPem(publicKey) {
   return base64ToPem(b64, "PUBLIC KEY");
 }
 
-// --- SHA256 helpers ---
 async function sha256Hex(bytes) {
   const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
   const hashArr = Array.from(new Uint8Array(hashBuf));
@@ -130,18 +137,15 @@ async function sha256HexFromString(s) {
   return await sha256Hex(buf);
 }
 
-// --- KU address derivation (hash-based, deterministic) ---
 async function deriveKUAddress(publicKey) {
   const spki = await crypto.subtle.exportKey("spki", publicKey);
   const hex = await sha256Hex(spki);
-  return "KU1" + hex.slice(0, 40); // 20 bytes
+  return "KU1" + hex.slice(0, 40);
 }
 
-// --- NEW: hash-based note_id minting (test bill serial) ---
 async function mintNoteId({ genesis, epoch_index, denom, owner_address, mint_nonce }) {
-  // Canonical mint string: deterministic + tamper-resistant
   const canonical = `KU|v1|MINT|${genesis}|${epoch_index}|${denom}|${owner_address}|${mint_nonce}`;
-  return await sha256HexFromString(canonical); // 64 hex chars
+  return await sha256HexFromString(canonical);
 }
 
 function nowUnix() {
@@ -159,19 +163,13 @@ $("#btnGen").addEventListener("click", async () => {
     const pem = await exportPublicKeyPem(keypair.publicKey);
     $("#pubPem").value = pem;
 
-    // derive addresses
     const fromKU = await deriveKUAddress(keypair.publicKey);
     $("#fromAddr").value = fromKU;
 
-    // placeholder to-address (overwrite if you want)
     $("#toAddr").value = "KU1" + "0".repeat(40);
 
-    // --- NEW: auto-mint a test note_id (hash-based bill serial) ---
-    const GENESIS = 1704067200; // placeholder genesis (change later to your real genesis)
-    const EPOCH_INDEX = 0;      // placeholder epoch index for testing
-    const DENOM = 10;           // fixed denomination bill (10 KU) for testing
+    // local fallback note_id so the page has something immediately
     const mint_nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
-
     const note_id = await mintNoteId({
       genesis: GENESIS,
       epoch_index: EPOCH_INDEX,
@@ -185,10 +183,58 @@ $("#btnGen").addEventListener("click", async () => {
     $("#output").textContent =
       `Keypair generated.\n` +
       `KU address: ${fromKU}\n` +
-      `Minted test bill note_id (sha256): ${note_id}\n` +
-      `Denom: ${DENOM} KU`;
+      `Local test note_id: ${note_id}\n` +
+      `Denom: ${DENOM} KU\n\n` +
+      `Now click "Treasury Mint Test Bill" to get a server-minted note_id.`;
   } catch (err) {
     $("#output").textContent = "Key generation error: " + err.message;
+  }
+});
+
+$("#btnMint").addEventListener("click", async () => {
+  try {
+    if (!keypair) throw new Error("Generate keypair first.");
+
+    const response = await fetch("/.netlify/functions/treasury-mint-test", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        to_public_key_pem: $("#pubPem").value.trim(),
+        denom: DENOM,
+        epoch_index: EPOCH_INDEX,
+        genesis: GENESIS
+      })
+    });
+
+    const text = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      $("#output").textContent = `Mint returned non-JSON:\n${text}`;
+      return;
+    }
+
+    if (!response.ok) {
+      $("#output").textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+
+    $("#noteId").value = data.note_id;
+    $("#fromAddr").value = data.to_address;
+
+    $("#output").textContent =
+      `Treasury mint successful.\n` +
+      `To: ${data.to_address}\n` +
+      `Denom: ${data.denom}\n` +
+      `note_id: ${data.note_id}\n` +
+      `mint_txid: ${data.mint_txid}\n\n` +
+      `You can now sign and send this bill.`;
+  } catch (err) {
+    $("#output").textContent = "Mint error: " + err.message;
   }
 });
 
@@ -237,18 +283,14 @@ $("#btnSend").addEventListener("click", async () => {
       signature_b64: $("#sigB64").value.trim()
     };
 
-    const response = await fetch(
-      "/.netlify/functions/note-transfer-test",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      }
-    );
+    const response = await fetch("/.netlify/functions/note-transfer-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
 
     const text = await response.text();
     $("#output").textContent = text;
-
   } catch (err) {
     $("#output").textContent = "Send error: " + err.message;
   }
