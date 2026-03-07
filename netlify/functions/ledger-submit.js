@@ -136,6 +136,12 @@ exports.handler = async (event) => {
     });
   }
 
+  if (from === to) {
+    return json(400, {
+      error: "SELF_TRANSFER_NOT_ALLOWED"
+    });
+  }
+
   if (!Number.isInteger(tsInt) || tsInt <= 0) {
     return json(400, {
       error: "INVALID_TIMESTAMP",
@@ -195,6 +201,65 @@ exports.handler = async (event) => {
   try {
     connection = await getConnection();
 
+    // 1) Find latest event for this note
+    const [latestRows] = await connection.execute(
+      `SELECT event_index, event_type, note_id, denom, from_address, to_address, ts, txid
+       FROM kentrin_events
+       WHERE note_id = ?
+       ORDER BY event_index DESC
+       LIMIT 1`,
+      [note_id]
+    );
+
+    if (!latestRows || latestRows.length === 0) {
+      return json(404, {
+        error: "NOTE_NOT_FOUND",
+        hint: "This note_id does not exist in the ledger. Mint it first.",
+        note_id
+      });
+    }
+
+    const latest = latestRows[0];
+
+    // 2) Denomination must match original/latest record
+    if (Number(latest.denom) !== denomInt) {
+      return json(400, {
+        error: "DENOM_MISMATCH",
+        note_id,
+        provided_denom: denomInt,
+        ledger_denom: Number(latest.denom)
+      });
+    }
+
+    // 3) Current owner must be sender
+    if (latest.to_address !== from) {
+      return json(409, {
+        error: "NOT_CURRENT_OWNER",
+        note_id,
+        current_owner: latest.to_address,
+        attempted_from: from,
+        latest_event_type: latest.event_type,
+        latest_txid: latest.txid
+      });
+    }
+
+    // 4) Prevent immediate duplicate replay by txid
+    const [dupRows] = await connection.execute(
+      `SELECT event_index
+       FROM kentrin_events
+       WHERE txid = ?
+       LIMIT 1`,
+      [txid]
+    );
+
+    if (dupRows && dupRows.length > 0) {
+      return json(409, {
+        error: "DUPLICATE_TXID",
+        txid
+      });
+    }
+
+    // 5) Insert transfer event
     await connection.execute(
       `INSERT INTO kentrin_events
       (event_type, note_id, denom, from_address, to_address, ts, nonce, txid, signature_b64, canonical_message)
@@ -216,6 +281,7 @@ exports.handler = async (event) => {
     return json(200, {
       ok: true,
       stored: true,
+      ownership_verified: true,
       event_type: "TRANSFER",
       txid,
       note_id,
@@ -227,7 +293,6 @@ exports.handler = async (event) => {
       canonical_message
     });
   } catch (err) {
-    // MySQL duplicate key
     if (err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062)) {
       return json(409, {
         error: "DUPLICATE_TXID",
