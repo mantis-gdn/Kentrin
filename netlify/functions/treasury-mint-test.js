@@ -1,4 +1,5 @@
 // netlify/functions/treasury-mint-test.js
+
 const crypto = require("crypto");
 
 function json(statusCode, bodyObj) {
@@ -6,9 +7,9 @@ function json(statusCode, bodyObj) {
     statusCode,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store"
     },
-    body: JSON.stringify(bodyObj, null, 2),
+    body: JSON.stringify(bodyObj, null, 2)
   };
 }
 
@@ -32,6 +33,7 @@ function mintCanonical({ genesis, epoch_index, denom, owner_address, mint_nonce 
 }
 
 exports.handler = async (event) => {
+
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Use POST" });
   }
@@ -59,6 +61,7 @@ exports.handler = async (event) => {
 
   const missing = [];
 
+  // FIXED VERSION — allows epoch_index = 0
   for (const k of ["to_public_key_pem", "denom", "epoch_index", "genesis"]) {
     if (payload[k] === undefined || payload[k] === null || payload[k] === "") {
       missing.push(k);
@@ -83,14 +86,14 @@ exports.handler = async (event) => {
   if (!Number.isInteger(epochInt) || epochInt < 0) {
     return json(400, {
       error: "INVALID_EPOCH_INDEX",
-      hint: "epoch_index must be an integer >= 0"
+      hint: "epoch_index must be >= 0"
     });
   }
 
   if (!/^\d+$/.test(genesisStr)) {
     return json(400, {
       error: "INVALID_GENESIS",
-      hint: "genesis must be unix seconds as digits"
+      hint: "genesis must be unix seconds"
     });
   }
 
@@ -116,7 +119,10 @@ exports.handler = async (event) => {
   });
 
   const note_id = sha256HexStr(canonical);
-  const mint_txid = sha256HexStr(`KU|v1|MINT_TX|${canonical}`);
+
+  const mint_txid = sha256HexStr(
+    `KU|v1|MINT_TX|${canonical}`
+  );
 
   return json(200, {
     ok: true,
@@ -129,4 +135,5 @@ exports.handler = async (event) => {
     mint_nonce,
     canonical_mint: canonical
   });
+
 };
