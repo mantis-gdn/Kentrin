@@ -194,6 +194,9 @@ $("#btnMint").addEventListener("click", async () => {
   try {
     if (!keypair) throw new Error("Generate keypair first.");
 
+    const treasury_mint_secret = $("#mintSecret").value.trim();
+    if (!treasury_mint_secret) throw new Error("Enter treasury mint secret first.");
+
     const response = await fetch("/.netlify/functions/treasury-mint-test", {
       method: "POST",
       headers: {
@@ -203,7 +206,8 @@ $("#btnMint").addEventListener("click", async () => {
         to_public_key_pem: $("#pubPem").value.trim(),
         denom: DENOM,
         epoch_index: EPOCH_INDEX,
-        genesis: GENESIS
+        genesis: GENESIS,
+        treasury_mint_secret
       })
     });
 
@@ -230,7 +234,7 @@ $("#btnMint").addEventListener("click", async () => {
       `To: ${data.to_address}\n` +
       `Denom: ${data.denom}\n` +
       `note_id: ${data.note_id}\n` +
-      `mint_txid: ${data.mint_txid}\n\n` +
+      `txid: ${data.txid}\n\n` +
       `You can now sign and send this bill to the ledger.`;
   } catch (err) {
     $("#output").textContent = "Mint error: " + err.message;
