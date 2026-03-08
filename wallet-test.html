@@ -194,7 +194,10 @@ $("#btnMint").addEventListener("click", async () => {
   try {
     if (!keypair) throw new Error("Generate keypair first.");
 
-    const treasury_mint_secret = $("#mintSecret").value.trim();
+    const mintSecretEl = $("#mintSecret");
+    if (!mintSecretEl) throw new Error('Missing #mintSecret input in HTML.');
+
+    const treasury_mint_secret = mintSecretEl.value.trim();
     if (!treasury_mint_secret) throw new Error("Enter treasury mint secret first.");
 
     const response = await fetch("/.netlify/functions/treasury-mint-test", {
