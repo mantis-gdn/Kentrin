@@ -69,6 +69,7 @@
 <div class="small">
 Generates an Ed25519 keypair in your browser, derives a KU address from the public key,
 requests a server-side treasury mint, signs a KU transfer message, and submits it to the permanent ledger endpoint.
+Now also supports automatic split spend with change.
 </div>
 
 <button id="btnGen">1) Generate Keypair</button>
@@ -88,10 +89,29 @@ requests a server-side treasury mint, signs a KU transfer message, and submits i
 </div>
 
 <button id="btnSign">3) Sign Message</button>
-<textarea id="canonical" rows="3" placeholder="Canonical message"></textarea>
-<textarea id="sigB64" rows="3" placeholder="Signature (base64)"></textarea>
+<textarea id="canonical" rows="3" placeholder="Canonical transfer message"></textarea>
+<textarea id="sigB64" rows="3" placeholder="Transfer signature (base64)"></textarea>
 
 <button id="btnSend">4) Send to Ledger</button>
+
+<hr style="border-color:#222; margin:24px 0;" />
+
+<h2 style="margin-bottom:8px;">Split Spend</h2>
+<div class="small">
+Use one note as input, send part to a recipient, and automatically return change back to the sender.
+Example: 10 KU note → 3 KU to recipient + 7 KU back to sender.
+</div>
+
+<div class="row">
+  <input id="sendAmount" placeholder="Amount to send" type="number" min="1" />
+  <input id="recipientAddr" placeholder="Recipient KU address" value="" />
+</div>
+
+<button id="btnSpend">5) Create Split Spend</button>
+<textarea id="spendCanonical" rows="5" placeholder="Canonical spend message"></textarea>
+<textarea id="spendSigB64" rows="3" placeholder="Spend signature (base64)"></textarea>
+
+<button id="btnSubmitSpend">6) Submit Split Spend</button>
 
 <pre id="output">Output will appear here...</pre>
 
@@ -100,6 +120,9 @@ const $ = (id) => document.getElementById(id.startsWith("#") ? id.slice(1) : id)
 
 let keypair = null;
 let lastTimestamp = null;
+let currentNoteValue = null;
+let lastSpendTimestamp = null;
+let lastSpendOutputs = null;
 
 const GENESIS = 1704067200;
 const EPOCH_INDEX = 0;
@@ -107,6 +130,14 @@ const DENOM = 10;
 
 function canonicalTransferMessage({ note_id, from, to, ts, nonce }) {
   return `KU|v1|TRANSFER|${note_id}|${from}|${to}|${ts}|${nonce}`;
+}
+
+function canonicalSpendMessage({ input_note_id, from, outputs, ts, nonce }) {
+  const outputPart = outputs
+    .map((o, i) => `${i}:${o.to}:${o.value}`)
+    .join("|");
+
+  return `KU|v1|SPEND|${input_note_id}|${from}|${ts}|${nonce}|${outputPart}`;
 }
 
 function bufferToBase64(buffer) {
@@ -168,6 +199,7 @@ $("#btnGen").addEventListener("click", async () => {
     $("#fromAddr").value = fromKU;
 
     $("#toAddr").value = "KU1" + "0".repeat(40);
+    $("#recipientAddr").value = "";
 
     const mint_nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
     const note_id = await mintNoteId({
@@ -179,6 +211,11 @@ $("#btnGen").addEventListener("click", async () => {
     });
 
     $("#noteId").value = note_id;
+    currentNoteValue = DENOM;
+    lastSpendTimestamp = null;
+    lastSpendOutputs = null;
+    $("#spendCanonical").value = "";
+    $("#spendSigB64").value = "";
 
     $("#output").textContent =
       `Keypair generated.\n` +
@@ -196,7 +233,7 @@ $("#btnMint").addEventListener("click", async () => {
     if (!keypair) throw new Error("Generate keypair first.");
 
     const mintSecretEl = $("#mintSecret");
-    if (!mintSecretEl) throw new Error('Missing #mintSecret input in HTML.');
+    if (!mintSecretEl) throw new Error("Missing #mintSecret input in HTML.");
 
     const treasury_mint_secret = mintSecretEl.value.trim();
     if (!treasury_mint_secret) throw new Error("Enter treasury mint secret first.");
@@ -232,6 +269,11 @@ $("#btnMint").addEventListener("click", async () => {
 
     $("#noteId").value = data.note_id;
     $("#fromAddr").value = data.to_address;
+    currentNoteValue = Number(data.denom);
+    lastSpendTimestamp = null;
+    lastSpendOutputs = null;
+    $("#spendCanonical").value = "";
+    $("#spendSigB64").value = "";
 
     $("#output").textContent =
       `Treasury mint successful.\n` +
@@ -239,7 +281,7 @@ $("#btnMint").addEventListener("click", async () => {
       `Denom: ${data.denom}\n` +
       `note_id: ${data.note_id}\n` +
       `txid: ${data.txid}\n\n` +
-      `You can now sign and send this bill to the ledger.`;
+      `You can now sign/send a full transfer or create a split spend.`;
   } catch (err) {
     $("#output").textContent = "Mint error: " + err.message;
   }
@@ -270,7 +312,7 @@ $("#btnSign").addEventListener("click", async () => {
     );
 
     $("#sigB64").value = bufferToBase64(signature);
-    $("#output").textContent = "Message signed.";
+    $("#output").textContent = "Transfer message signed.";
   } catch (err) {
     $("#output").textContent = "Signing error: " + err.message;
   }
@@ -282,7 +324,7 @@ $("#btnSend").addEventListener("click", async () => {
 
     const body = {
       note_id: $("#noteId").value.trim().toLowerCase(),
-      denom: DENOM,
+      denom: currentNoteValue ?? DENOM,
       from: $("#fromAddr").value.trim(),
       to: $("#toAddr").value.trim(),
       ts: lastTimestamp ?? nowUnix(),
@@ -301,6 +343,109 @@ $("#btnSend").addEventListener("click", async () => {
     $("#output").textContent = text;
   } catch (err) {
     $("#output").textContent = "Send error: " + err.message;
+  }
+});
+
+$("#btnSpend").addEventListener("click", async () => {
+  try {
+    if (!keypair) throw new Error("Generate keypair first.");
+    if (!currentNoteValue || currentNoteValue <= 0) {
+      throw new Error("Mint a note first so the wallet knows its value.");
+    }
+
+    const input_note_id = $("#noteId").value.trim().toLowerCase();
+    const from = $("#fromAddr").value.trim();
+    const recipient = $("#recipientAddr").value.trim();
+    const sendAmount = Number($("#sendAmount").value);
+
+    if (!/^[a-f0-9]{64}$/.test(input_note_id)) {
+      throw new Error("Invalid input note_id.");
+    }
+
+    if (!from.startsWith("KU1")) {
+      throw new Error("Sender address must start with KU1.");
+    }
+
+    if (!recipient.startsWith("KU1")) {
+      throw new Error("Recipient address must start with KU1.");
+    }
+
+    if (!Number.isInteger(sendAmount) || sendAmount <= 0) {
+      throw new Error("Send amount must be a positive integer.");
+    }
+
+    if (sendAmount >= currentNoteValue) {
+      throw new Error("Send amount must be less than the full note value for split spend.");
+    }
+
+    const change = currentNoteValue - sendAmount;
+    const ts = nowUnix();
+    const nonce = `spend-${crypto.getRandomValues(new Uint32Array(1))[0].toString(16)}`;
+
+    const outputs = [
+      { to: recipient, value: sendAmount },
+      { to: from, value: change }
+    ];
+
+    const message = canonicalSpendMessage({
+      input_note_id,
+      from,
+      outputs,
+      ts,
+      nonce
+    });
+
+    const signature = await crypto.subtle.sign(
+      { name: "Ed25519" },
+      keypair.privateKey,
+      new TextEncoder().encode(message)
+    );
+
+    $("#spendCanonical").value = message;
+    $("#spendSigB64").value = bufferToBase64(signature);
+
+    lastSpendTimestamp = ts;
+    lastSpendOutputs = outputs;
+    $("#nonce").value = nonce;
+
+    $("#output").textContent =
+      `Split spend prepared.\n` +
+      `Input note value: ${currentNoteValue}\n` +
+      `Send: ${sendAmount}\n` +
+      `Change: ${change}\n` +
+      `Recipient: ${recipient}`;
+  } catch (err) {
+    $("#output").textContent = "Split spend error: " + err.message;
+  }
+});
+
+$("#btnSubmitSpend").addEventListener("click", async () => {
+  try {
+    if (!keypair) throw new Error("Generate keypair first.");
+    if (!lastSpendOutputs || !lastSpendOutputs.length) {
+      throw new Error("Create split spend first.");
+    }
+
+    const body = {
+      input_note_id: $("#noteId").value.trim().toLowerCase(),
+      from: $("#fromAddr").value.trim(),
+      ts: lastSpendTimestamp ?? nowUnix(),
+      nonce: $("#nonce").value.trim(),
+      from_public_key_pem: $("#pubPem").value.trim(),
+      outputs: lastSpendOutputs,
+      signature_b64: $("#spendSigB64").value.trim()
+    };
+
+    const response = await fetch("/.netlify/functions/spend-submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    const text = await response.text();
+    $("#output").textContent = text;
+  } catch (err) {
+    $("#output").textContent = "Submit spend error: " + err.message;
   }
 });
 </script>
