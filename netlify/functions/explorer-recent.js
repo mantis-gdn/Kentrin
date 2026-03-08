@@ -2,22 +2,46 @@ const { json, serverError, getRecentEvents, getStats, deriveNoteState } = requir
 
 exports.handler = async (event) => {
   try {
-    const limit = Number(event.queryStringParameters?.limit || 50);
+    const rawLimit = Number(event.queryStringParameters?.limit || 50);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(rawLimit, 200))
+      : 50;
+
     const recent = await getRecentEvents(limit);
     const stats = await getStats();
 
     const noteMap = new Map();
+
     for (const row of recent) {
       if (!row.note_id) continue;
-      if (!noteMap.has(row.note_id)) noteMap.set(row.note_id, []);
+
+      if (!noteMap.has(row.note_id)) {
+        noteMap.set(row.note_id, []);
+      }
+
       noteMap.get(row.note_id).push(row);
     }
 
     const flagged = [];
+
     for (const rows of noteMap.values()) {
-      const sorted = rows.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts) || (a.id || 0) - (b.id || 0));
+      const sorted = rows.slice().sort((a, b) => {
+        const tsA = Number(a.ts ?? 0);
+        const tsB = Number(b.ts ?? 0);
+
+        if (tsA !== tsB) return tsA - tsB;
+
+        const idxA = Number(a.event_index ?? 0);
+        const idxB = Number(b.event_index ?? 0);
+
+        return idxA - idxB;
+      });
+
       const state = deriveNoteState(sorted);
-      flagged.push(...state.anomalies);
+
+      if (state?.anomalies?.length) {
+        flagged.push(...state.anomalies);
+      }
     }
 
     return json(200, {
@@ -27,6 +51,7 @@ exports.handler = async (event) => {
       flagged: flagged.slice(0, 25)
     });
   } catch (err) {
+    console.error('explorer-recent error:', err);
     return serverError(err);
   }
 };
