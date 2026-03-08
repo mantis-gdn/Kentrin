@@ -7,3 +7,11 @@
   to = "https://kentrin.com/:splat"
   status = 301
   force = true
+[[redirects]]
+  from = "/explorer"
+  to = "/explorer/index.html"
+  status = 200
+[[redirects]]
+  from = "/explorer/*"
+  to = "/explorer/index.html"
+  status = 200

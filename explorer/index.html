@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kentrin Explorer</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --panel: #101010;
+      --panel-2: #151515;
+      --text: #e9e9e9;
+      --muted: #9a9a9a;
+      --line: #242424;
+      --accent: #c7a84a;
+      --good: #5ad37d;
+      --bad: #ff6f6f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+      padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1400px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 2rem; }
+    .sub { color: var(--muted); margin-bottom: 22px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    }
+    .label { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
+    .value { font-size: 1.35rem; font-weight: 700; word-break: break-word; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input, button {
+      background: #0d0d0d;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 1rem;
+    }
+    button {
+      background: var(--accent);
+      color: #111;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .section {
+      margin-top: 18px;
+    }
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 1.2rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+    th, td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 0.94rem;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .ok { color: var(--good); }
+    .bad { color: var(--bad); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+    .two-col {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 18px;
+    }
+    pre {
+      white-space: pre-wrap;
+      background: #0a0a0a;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      overflow: auto;
+      color: #d8d8d8;
+    }
+    @media (max-width: 900px) {
+      .two-col { grid-template-columns: 1fr; }
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kentrin Ledger Explorer</h1>
+    <div class="sub">Raw ledger facts. Derived ownership. Validation smoke detector.</div>
+
+    <div class="controls">
+      <input id="search" placeholder="Search txid, note_id, or KU address" />
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <div id="stats" class="grid"></div>
+
+    <div id="view"></div>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const view = $('#view');
+    const stats = $('#stats');
+
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>\"]/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+    }
+
+    function short(v, len = 14) {
+      if (!v) return '';
+      const s = String(v);
+      return s.length > len ? s.slice(0, len) + '…' : s;
+    }
+
+    function linkHash(kind, id) {
+      return `#/` + kind + `/` + encodeURIComponent(id);
+    }
+
+    function statCard(label, value) {
+      return `<div class="card"><div class="label">${esc(label)}</div><div class="value">${esc(value ?? '—')}</div></div>`;
+    }
+
+    function renderStats(s) {
+      stats.innerHTML = [
+        statCard('Total events', s.total_events),
+        statCard('Total notes', s.total_notes),
+        statCard('Total txs', s.total_txs),
+        statCard('Invalid events', s.invalid_events),
+        statCard('Latest timestamp', s.latest_ts || '—')
+      ].join('');
+    }
+
+    function recentTable(rows) {
+      return `
+      <div class="section">
+        <h2>Recent Activity</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th><th>Type</th><th>Note</th><th>From</th><th>To</th><th>Txid</th><th>Validity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td>${esc(r.ts || '—')}</td>
+                  <td><span class="pill">${esc(r.event_type || '—')}</span></td>
+                  <td class="mono">${r.note_id ? `<a href="${linkHash('note', r.note_id)}">${esc(short(r.note_id, 22))}</a>` : '—'}</td>
+                  <td class="mono">${r.from_address ? `<a href="${linkHash('address', r.from_address)}">${esc(short(r.from_address, 18))}</a>` : '—'}</td>
+                  <td class="mono">${r.to_address ? `<a href="${linkHash('address', r.to_address)}">${esc(short(r.to_address, 18))}</a>` : '—'}</td>
+                  <td class="mono"><a href="${linkHash('tx', r.txid)}">${esc(short(r.txid, 20))}</a></td>
+                  <td class="${r.is_valid === 0 ? 'bad' : 'ok'}">${r.is_valid === 0 ? esc(r.validation_error || 'invalid') : 'ok'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+    function anomalyPanel(flagged) {
+      return `
+      <div class="section">
+        <h2>Flagged Anomalies</h2>
+        <div class="card">
+          ${flagged.length ? flagged.map(f => `<div style="margin-bottom:12px"><span class="bad">${esc(f.type)}</span> · <span class="mono">${esc(short(f.note_id, 20))}</span> · ${esc(f.reason || '—')}</div>`).join('') : '<div class="ok">No anomalies found in the loaded slice.</div>'}
+        </div>
+      </div>`;
+    }
+
+    async function loadHome() {
+      const data = await fetch('/.netlify/functions/explorer-recent').then(r => r.json());
+      renderStats(data.stats || {});
+      view.innerHTML = recentTable(data.recent || []) + anomalyPanel(data.flagged || []);
+    }
+
+    async function loadNote(noteId) {
+      const data = await fetch('/.netlify/functions/explorer-note?id=' + encodeURIComponent(noteId)).then(r => r.json());
+      const note = data.note;
+      view.innerHTML = `
+        <div class="section two-col">
+          <div class="card">
+            <div class="label">Note</div>
+            <div class="value mono">${esc(note.note_id)}</div>
+            <div style="margin-top:14px">Current owner: <span class="mono">${esc(note.current_owner || '—')}</span></div>
+            <div>Derived from latest valid event: ${esc(note.latest_valid_event_type || '—')} / <span class="mono">${esc(note.latest_valid_txid || '—')}</span></div>
+            <div>Issued to: <span class="mono">${esc(note.issued_to || '—')}</span></div>
+            <div>Event count: ${esc(note.event_count)}</div>
+          </div>
+          <div class="card">
+            <div class="label">Anomalies</div>
+            ${note.anomalies.length ? note.anomalies.map(a => `<div class="bad" style="margin-bottom:10px">${esc(a.reason)}</div>`).join('') : '<div class="ok">No anomalies for this note.</div>'}
+          </div>
+        </div>
+        <div class="section">
+          <h2>Timeline</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Type</th><th>From</th><th>To</th><th>Owner Before</th><th>Owner After</th><th>Verdict</th><th>Txid</th></tr>
+              </thead>
+              <tbody>
+                ${note.timeline.map(r => `
+                  <tr>
+                    <td>${esc(r.ts || '—')}</td>
+                    <td>${esc(r.event_type)}</td>
+                    <td class="mono">${esc(r.from_address || '—')}</td>
+                    <td class="mono">${esc(r.to_address || '—')}</td>
+                    <td class="mono">${esc(r.derived_owner_before || '—')}</td>
+                    <td class="mono">${esc(r.derived_owner_after || '—')}</td>
+                    <td class="${r.derived_valid ? 'ok' : 'bad'}">${r.derived_valid ? 'valid' : esc(r.derived_error || 'invalid')}</td>
+                    <td class="mono"><a href="${linkHash('tx', r.txid)}">${esc(short(r.txid, 24))}</a></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    async function loadAddress(address) {
+      const data = await fetch('/.netlify/functions/explorer-address?id=' + encodeURIComponent(address)).then(r => r.json());
+      const a = data.address;
+      view.innerHTML = `
+        <div class="section two-col">
+          <div class="card">
+            <div class="label">Address</div>
+            <div class="value mono">${esc(a.address)}</div>
+            <div style="margin-top:14px">Current notes owned: ${esc(a.current_notes.length)}</div>
+            <div>Inbound events: ${esc(a.inbound_count)}</div>
+            <div>Outbound events: ${esc(a.outbound_count)}</div>
+          </div>
+          <div class="card">
+            <div class="label">Current Notes</div>
+            ${a.current_notes.length ? a.current_notes.map(n => `<div style="margin-bottom:10px"><a class="mono" href="${linkHash('note', n.note_id)}">${esc(short(n.note_id, 24))}</a></div>`).join('') : '<div>No currently owned notes.</div>'}
+          </div>
+        </div>
+        <div class="section">
+          <h2>Recent Activity</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Type</th><th>Note</th><th>From</th><th>To</th><th>Txid</th></tr>
+              </thead>
+              <tbody>
+                ${a.recent_activity.map(r => `
+                  <tr>
+                    <td>${esc(r.ts || '—')}</td>
+                    <td>${esc(r.event_type || '—')}</td>
+                    <td class="mono"><a href="${linkHash('note', r.note_id)}">${esc(short(r.note_id, 20))}</a></td>
+                    <td class="mono">${esc(short(r.from_address, 18) || '—')}</td>
+                    <td class="mono">${esc(short(r.to_address, 18) || '—')}</td>
+                    <td class="mono"><a href="${linkHash('tx', r.txid)}">${esc(short(r.txid, 24))}</a></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    async function loadTx(txid) {
+      const data = await fetch('/.netlify/functions/explorer-tx?id=' + encodeURIComponent(txid)).then(r => r.json());
+      const events = data.events || [];
+      view.innerHTML = `
+        <div class="section">
+          <div class="card">
+            <div class="label">Transaction</div>
+            <div class="value mono">${esc(txid)}</div>
+            <div style="margin-top:14px">Rows found: ${events.length}</div>
+          </div>
+        </div>
+        ${events.map((e, i) => `
+          <div class="section">
+            <h2>Ledger Row ${i + 1}</h2>
+            <pre>${esc(JSON.stringify(e.raw, null, 2))}</pre>
+          </div>`).join('')}`;
+    }
+
+    async function loadLookup(value) {
+      const q = decodeURIComponent(value);
+      if (/^KU/i.test(q)) return loadAddress(q);
+
+      const noteRes = await fetch('/.netlify/functions/explorer-note?id=' + encodeURIComponent(q));
+      if (noteRes.ok) return loadNote(q);
+
+      const txRes = await fetch('/.netlify/functions/explorer-tx?id=' + encodeURIComponent(q));
+      if (txRes.ok) return loadTx(q);
+
+      view.innerHTML = `<div class="card bad">Nothing found for <span class="mono">${esc(q)}</span>.</div>`;
+    }
+
+    async function router() {
+      const hash = location.hash.replace(/^#\//, '');
+      if (!hash) return loadHome();
+      const [kind, ...rest] = hash.split('/');
+      const id = rest.join('/');
+      try {
+        if (kind === 'note') await loadNote(decodeURIComponent(id));
+        else if (kind === 'address') await loadAddress(decodeURIComponent(id));
+        else if (kind === 'tx') await loadTx(decodeURIComponent(id));
+        else if (kind === 'lookup') await loadLookup(id);
+        else await loadHome();
+      } catch (err) {
+        view.innerHTML = `<div class="card bad">Explorer error: ${esc(err.message)}</div>`;
+      }
+    }
+
+    $('#searchBtn').addEventListener('click', () => {
+      const q = $('#search').value.trim();
+      if (!q) return;
+      location.hash = '/lookup/' + encodeURIComponent(q);
+    });
+
+    $('#search').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('#searchBtn').click();
+    });
+
+    window.addEventListener('hashchange', router);
+    router();
+  </script>
+</body>
+</html>
