@@ -33,7 +33,7 @@ function serverError(err) {
 function getPool() {
   return mysql.createPool({
     host: process.env.DB_HOST,
-    user: process.env.DB_USER,
+    user: process.env.DB_USER || process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD || process.env.DB_PASS,
     database: process.env.DB_NAME,
     port: Number(process.env.DB_PORT || 3306),
