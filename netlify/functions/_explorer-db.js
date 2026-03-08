@@ -21,10 +21,12 @@ function badRequest(message, extra = {}) {
 }
 
 function serverError(err) {
+  console.error('Explorer DB error:', err);
+
   return json(500, {
     error: 'SERVER_ERROR',
     message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    stack: err.stack
   });
 }
 
@@ -32,7 +34,7 @@ function getPool() {
   return mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    password: process.env.DB_PASSWORD || process.env.DB_PASS,
     database: process.env.DB_NAME,
     port: Number(process.env.DB_PORT || 3306),
     waitForConnections: true,
@@ -67,9 +69,12 @@ function normalizeRow(row) {
 
 async function query(sql, params = []) {
   const pool = getPool();
-  const [rows] = await pool.query(sql, params);
-  await pool.end();
-  return rows;
+  try {
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  } finally {
+    await pool.end();
+  }
 }
 
 async function getRecentEvents(limit = 50) {
@@ -228,18 +233,33 @@ function summarizeAddress(address, events) {
   const noteBuckets = new Map();
 
   for (const row of events) {
-    if (row.note_id && !noteBuckets.has(row.note_id)) noteBuckets.set(row.note_id, []);
-    if (row.note_id) noteBuckets.get(row.note_id).push(row);
+    if (row.note_id && !noteBuckets.has(row.note_id)) {
+      noteBuckets.set(row.note_id, []);
+    }
+
+    if (row.note_id) {
+      noteBuckets.get(row.note_id).push(row);
+    }
+
     if (row.to_address === address) inbound.push(row);
     if (row.from_address === address) outbound.push(row);
   }
 
   for (const [noteId, noteEvents] of noteBuckets.entries()) {
     const state = deriveNoteState(
-      noteEvents
-        .slice()
-        .sort((a, b) => new Date(a.ts) - new Date(b.ts) || (a.id || 0) - (b.id || 0))
+      noteEvents.slice().sort((a, b) => {
+        const tsA = Number(a.ts ?? 0);
+        const tsB = Number(b.ts ?? 0);
+
+        if (tsA !== tsB) return tsA - tsB;
+
+        const idxA = Number(a.event_index ?? a.id ?? 0);
+        const idxB = Number(b.event_index ?? b.id ?? 0);
+
+        return idxA - idxB;
+      })
     );
+
     if (state.current_owner === address) {
       owned.set(noteId, {
         note_id: noteId,
