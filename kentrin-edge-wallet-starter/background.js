@@ -1,6 +1,7 @@
 import {
-  generateWalletMaterial,
   generateRecoveryPhrase,
+  validateRecoveryPhrase,
+  deriveWalletFromMnemonic,
   deriveDeterministicSeedFromPhrase,
   encryptJsonWithPassword,
   decryptJsonWithPassword
@@ -27,19 +28,23 @@ async function createWallet({ password, walletName }) {
   if (!password) throw new Error("Password is required.");
 
   const recoveryPhrase = generateRecoveryPhrase();
-  const recoverySeed = await deriveDeterministicSeedFromPhrase(recoveryPhrase);
-  const material = await generateWalletMaterial();
+  const material = await deriveWalletFromMnemonic(recoveryPhrase);
 
   const payload = {
     version: 1,
     walletName: walletName || "Kentrin Wallet",
     recoveryPhrase,
-    recoverySeed,
-    ...material
+    recoverySeed: material.recoverySeed,
+    kentrinSeedBase64: material.kentrinSeedBase64,
+    address: material.address,
+    publicKeyPem: material.publicKeyPem,
+    publicKeySpkiBase64: material.publicKeySpkiBase64,
+    privateKeyPkcs8Base64: material.privateKeyPkcs8Base64
   };
 
   const encrypted = await encryptJsonWithPassword(payload, password);
   await saveWalletBlob(encrypted);
+
   await saveWalletSession({
     walletName: payload.walletName,
     address: payload.address,
@@ -60,19 +65,28 @@ async function restoreWallet({ password, recoveryPhrase, walletName }) {
   if (!password) throw new Error("Password is required.");
   if (!recoveryPhrase?.trim()) throw new Error("Recovery phrase is required.");
 
-  const recoverySeed = await deriveDeterministicSeedFromPhrase(recoveryPhrase);
-  const material = await generateWalletMaterial();
+  const normalizedPhrase = recoveryPhrase.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!validateRecoveryPhrase(normalizedPhrase)) {
+    throw new Error("Recovery phrase is invalid.");
+  }
+
+  const material = await deriveWalletFromMnemonic(normalizedPhrase);
 
   const payload = {
     version: 1,
     walletName: walletName || "Kentrin Wallet",
-    recoveryPhrase: recoveryPhrase.trim().toLowerCase(),
-    recoverySeed,
-    ...material
+    recoveryPhrase: normalizedPhrase,
+    recoverySeed: material.recoverySeed,
+    kentrinSeedBase64: material.kentrinSeedBase64,
+    address: material.address,
+    publicKeyPem: material.publicKeyPem,
+    publicKeySpkiBase64: material.publicKeySpkiBase64,
+    privateKeyPkcs8Base64: material.privateKeyPkcs8Base64
   };
 
   const encrypted = await encryptJsonWithPassword(payload, password);
   await saveWalletBlob(encrypted);
+
   await saveWalletSession({
     walletName: payload.walletName,
     address: payload.address,
@@ -95,6 +109,7 @@ async function unlockWallet({ password }) {
   if (!password) throw new Error("Password is required.");
 
   const payload = await decryptJsonWithPassword(blob, password);
+
   await saveWalletSession({
     walletName: payload.walletName,
     address: payload.address,
@@ -128,23 +143,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "CREATE_WALLET":
         sendResponse(await createWallet(message.payload));
         break;
+
       case "RESTORE_WALLET":
         sendResponse(await restoreWallet(message.payload));
         break;
+
       case "UNLOCK_WALLET":
         sendResponse(await unlockWallet(message.payload));
         break;
+
       case "LOCK_WALLET":
         await clearWalletSession();
         sendResponse({ ok: true, message: "Wallet locked." });
         break;
+
       case "CLEAR_SESSION":
         await clearWalletSession();
         sendResponse({ ok: true, message: "Session cleared." });
         break;
+
       case "GET_EXTENSION_STATE":
         sendResponse(await getExtensionState());
         break;
+
       case "GET_WALLET_DETAILS": {
         const session = await getWalletSession();
         const blob = await getWalletBlob();
@@ -156,23 +177,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         break;
       }
+
       case "SAVE_WALLET_NAME": {
         const blob = await getWalletBlob();
         if (!blob) throw new Error("No wallet to rename.");
-        sendResponse({ ok: true, message: "Wallet name save hook is ready. Wire rename logic next." });
+        sendResponse({
+          ok: true,
+          message: "Wallet name save hook is ready. Wire rename persistence next."
+        });
         break;
       }
+
       case "SCAN_NOTES": {
         const notes = await scanKnownNotes(message.payload.apiBase, message.payload.noteIds || []);
         await saveCachedNotes(message.payload.address, notes);
         sendResponse({ ok: true, notes });
         break;
       }
+
       case "GET_CACHED_NOTES": {
         const notes = await getCachedNotes(message.payload.address);
         sendResponse({ ok: true, notes });
         break;
       }
+
       case "PREVIEW_TRANSFER": {
         const session = await getWalletSession();
         const preview = await previewTransfer({
@@ -184,15 +212,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, preview });
         break;
       }
+
       case "SUBMIT_TRANSFER": {
         const result = await submitTransfer(message.payload.apiBase, message.payload.preview);
         sendResponse({ ok: true, result });
         break;
       }
+
       case "DELETE_WALLET":
         await clearAllWalletData();
         sendResponse({ ok: true, message: "Local wallet data deleted." });
         break;
+
       default:
         throw new Error(`Unknown message type: ${message.type}`);
     }

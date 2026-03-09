@@ -1,3 +1,6 @@
+import * as bip39 from "bip39";
+import nacl from "tweetnacl";
+
 function bytesToHex(bytes) {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
@@ -13,97 +16,131 @@ function base64ToBytes(base64) {
   return Uint8Array.from(binary, c => c.charCodeAt(0));
 }
 
+function concatBytes(...arrays) {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const out = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    out.set(arr, offset);
+    offset += arr.length;
+  }
+  return out;
+}
+
 async function sha256Bytes(input) {
   const hash = await crypto.subtle.digest("SHA-256", input);
   return new Uint8Array(hash);
 }
 
-export async function deriveAddressFromPublicKey(publicKey) {
-  const spki = await crypto.subtle.exportKey("spki", publicKey);
-  const digest = await sha256Bytes(spki);
-  return "KU1" + bytesToHex(digest).slice(0, 40);
+function normalizeRecoveryPhrase(phrase) {
+  return phrase.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export async function exportPublicKeyPem(publicKey) {
-  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", publicKey));
-  const base64 = bytesToBase64(spki).match(/.{1,64}/g)?.join("\n") || "";
-  return `-----BEGIN PUBLIC KEY-----\n${base64}\n-----END PUBLIC KEY-----`;
+// ASN.1 DER prefix for Ed25519 SubjectPublicKeyInfo:
+// 302a300506032b6570032100 || 32-byte raw public key
+function spkiFromRawPublicKey(publicKeyBytes) {
+  const prefix = Uint8Array.from([
+    0x30, 0x2a,
+    0x30, 0x05,
+    0x06, 0x03, 0x2b, 0x65, 0x70,
+    0x03, 0x21, 0x00
+  ]);
+  return concatBytes(prefix, publicKeyBytes);
 }
 
-export async function exportPrivateKeyPkcs8Base64(privateKey) {
-  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", privateKey));
-  return bytesToBase64(pkcs8);
+// ASN.1 DER prefix for Ed25519 PKCS#8 private key seed:
+// 302e020100300506032b657004220420 || 32-byte seed
+function pkcs8FromRawPrivateSeed(privateSeedBytes) {
+  const prefix = Uint8Array.from([
+    0x30, 0x2e,
+    0x02, 0x01, 0x00,
+    0x30, 0x05,
+    0x06, 0x03, 0x2b, 0x65, 0x70,
+    0x04, 0x22, 0x04, 0x20
+  ]);
+  return concatBytes(prefix, privateSeedBytes);
 }
 
-export async function importPrivateKeyPkcs8Base64(pkcs8Base64) {
-  return crypto.subtle.importKey(
-    "pkcs8",
-    base64ToBytes(pkcs8Base64),
-    { name: "Ed25519" },
-    true,
-    ["sign"]
-  );
+function rawPrivateSeedFromPkcs8(pkcs8Bytes) {
+  const prefixLength = 16;
+  if (!(pkcs8Bytes instanceof Uint8Array)) {
+    throw new Error("PKCS8 input must be Uint8Array.");
+  }
+  if (pkcs8Bytes.length !== prefixLength + 32) {
+    throw new Error("Invalid Ed25519 PKCS8 private key length.");
+  }
+  return pkcs8Bytes.slice(prefixLength);
 }
 
-export async function importPublicKeySpkiBase64(spkiBase64) {
-  return crypto.subtle.importKey(
-    "spki",
-    base64ToBytes(spkiBase64),
-    { name: "Ed25519" },
-    true,
-    ["verify"]
-  );
+export function generateRecoveryPhrase() {
+  return bip39.generateMnemonic(128);
 }
 
-export async function exportPublicKeySpkiBase64(publicKey) {
-  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", publicKey));
-  return bytesToBase64(spki);
+export function validateRecoveryPhrase(phrase) {
+  return bip39.validateMnemonic(normalizeRecoveryPhrase(phrase));
 }
 
-export async function generateWalletMaterial() {
-  const keypair = await crypto.subtle.generateKey(
-    { name: "Ed25519" },
-    true,
-    ["sign", "verify"]
-  );
+export async function deriveDeterministicSeedFromPhrase(phrase) {
+  const normalized = normalizeRecoveryPhrase(phrase);
+  if (!validateRecoveryPhrase(normalized)) {
+    throw new Error("Invalid recovery phrase.");
+  }
 
-  const publicKeySpkiBase64 = await exportPublicKeySpkiBase64(keypair.publicKey);
-  const privateKeyPkcs8Base64 = await exportPrivateKeyPkcs8Base64(keypair.privateKey);
-  const address = await deriveAddressFromPublicKey(keypair.publicKey);
-  const publicKeyPem = await exportPublicKeyPem(keypair.publicKey);
+  const bip39Seed = await bip39.mnemonicToSeed(normalized);
+  return bytesToBase64(new Uint8Array(bip39Seed));
+}
+
+export async function deriveWalletFromMnemonic(phrase) {
+  const normalized = normalizeRecoveryPhrase(phrase);
+
+  if (!validateRecoveryPhrase(normalized)) {
+    throw new Error("Invalid recovery phrase.");
+  }
+
+  const bip39Seed = new Uint8Array(await bip39.mnemonicToSeed(normalized));
+
+  // Versioned deterministic derivation rule for Kentrin single-account wallet:
+  // SHA-256("KENTRIN|WALLET|v1|" + bip39Seed)
+  const domain = new TextEncoder().encode("KENTRIN|WALLET|v1|");
+  const privateSeed = await sha256Bytes(concatBytes(domain, bip39Seed));
+
+  const keyPair = nacl.sign.keyPair.fromSeed(privateSeed);
+  const publicKeyRaw = new Uint8Array(keyPair.publicKey);
+
+  const publicKeySpki = spkiFromRawPublicKey(publicKeyRaw);
+  const publicKeySpkiBase64 = bytesToBase64(publicKeySpki);
+
+  const privateKeyPkcs8 = pkcs8FromRawPrivateSeed(privateSeed);
+  const privateKeyPkcs8Base64 = bytesToBase64(privateKeyPkcs8);
+
+  const publicKeyPem = await exportPublicKeyPem(publicKeyRaw);
+  const address = await deriveAddressFromPublicKey(publicKeyRaw);
 
   return {
     address,
     publicKeyPem,
     publicKeySpkiBase64,
-    privateKeyPkcs8Base64
+    privateKeyPkcs8Base64,
+    recoverySeed: bytesToBase64(bip39Seed),
+    kentrinSeedBase64: bytesToBase64(privateSeed)
   };
 }
 
-export function generateRecoveryPhrase() {
-  const wordList = [
-    "anchor","apple","ash","atom","barrel","basic","beacon","blade","brass","bridge","cable","candle",
-    "canyon","carbon","cedar","cipher","cobalt","comet","copper","crystal","delta","ember","falcon",
-    "fiber","forge","frost","gamma","glow","granite","harbor","helix","hollow","ion","jade","keystone",
-    "kinetic","lantern","lattice","ledger","linen","matrix","mercury","midnight","nova","oak","onyx",
-    "orbit","pearl","phoenix","prism","pulse","quartz","radar","raven","reef","relay","ripple","signal",
-    "silver","slate","solar","static","stone","summit","tensor","thunder","timber","torch","vector",
-    "violet","wave","willow","wire","zenith"
-  ];
-
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const words = [];
-  for (let i = 0; i < 12; i += 1) {
-    words.push(wordList[bytes[i] % wordList.length]);
-  }
-  return words.join(" ");
+export async function deriveAddressFromPublicKey(publicKeyRawBytes) {
+  const spki = spkiFromRawPublicKey(publicKeyRawBytes);
+  const digest = await sha256Bytes(spki);
+  return "KU1" + bytesToHex(digest).slice(0, 40);
 }
 
-export async function deriveDeterministicSeedFromPhrase(phrase) {
-  const data = new TextEncoder().encode(phrase.trim().toLowerCase());
-  const digest = await sha256Bytes(data);
-  return bytesToBase64(digest);
+export async function exportPublicKeyPem(publicKeyRawBytes) {
+  const spki = spkiFromRawPublicKey(publicKeyRawBytes);
+  const base64 = bytesToBase64(spki).match(/.{1,64}/g)?.join("\n") || "";
+  return `-----BEGIN PUBLIC KEY-----\n${base64}\n-----END PUBLIC KEY-----`;
+}
+
+export async function exportPrivateKeyPkcs8Base64(privateSeedBytes) {
+  const pkcs8 = pkcs8FromRawPrivateSeed(privateSeedBytes);
+  return bytesToBase64(pkcs8);
 }
 
 async function deriveAesKey(password, saltBytes) {
@@ -167,11 +204,14 @@ export async function decryptJsonWithPassword(blob, password) {
 }
 
 export async function signCanonicalMessage(privateKeyPkcs8Base64, message) {
-  const privateKey = await importPrivateKeyPkcs8Base64(privateKeyPkcs8Base64);
-  const sig = await crypto.subtle.sign(
-    { name: "Ed25519" },
-    privateKey,
-    new TextEncoder().encode(message)
+  const pkcs8Bytes = base64ToBytes(privateKeyPkcs8Base64);
+  const privateSeed = rawPrivateSeedFromPkcs8(pkcs8Bytes);
+  const keyPair = nacl.sign.keyPair.fromSeed(privateSeed);
+
+  const signature = nacl.sign.detached(
+    new TextEncoder().encode(message),
+    keyPair.secretKey
   );
-  return bytesToBase64(new Uint8Array(sig));
+
+  return bytesToBase64(signature);
 }
