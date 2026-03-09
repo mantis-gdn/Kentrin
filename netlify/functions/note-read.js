@@ -18,7 +18,10 @@ exports.handler = async (event) => {
     const note_id = (event.queryStringParameters?.note_id || "").trim().toLowerCase();
 
     if (!/^[a-f0-9]{64}$/.test(note_id)) {
-      return json(400, { error: "INVALID_NOTE_ID" });
+      return json(400, {
+        error: "INVALID_NOTE_ID",
+        note_id
+      });
     }
 
     db = await mysql.createConnection({
@@ -78,7 +81,12 @@ exports.handler = async (event) => {
   } catch (err) {
     return json(500, {
       error: "SERVER_ERROR",
-      details: err.message
+      message: err.message,
+      code: err.code || null,
+      errno: err.errno || null,
+      sqlState: err.sqlState || null,
+      sqlMessage: err.sqlMessage || null,
+      stack: err.stack || null
     });
   } finally {
     if (db) {
