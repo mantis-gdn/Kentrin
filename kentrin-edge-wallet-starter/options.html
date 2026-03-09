@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kentrin Wallet Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>Kentrin Wallet Dashboard</h1>
+      <p>Create a wallet, back up the recovery phrase, unlock it, scan notes, and prepare sends.</p>
+      <span class="badge">Manifest V3</span>
+      <span class="badge">Edge extension starter</span>
+      <span class="badge">Kentrin-ready shell</span>
+    </div>
+
+    <div class="row">
+      <div class="card stack">
+        <h3>Create / Restore</h3>
+        <button id="createWallet" class="primary">Create New Wallet</button>
+        <button id="restoreToggle">Restore From Recovery Phrase</button>
+
+        <div id="recoveryWrap" class="hidden">
+          <label for="recoveryPhrase">Recovery phrase</label>
+          <textarea id="recoveryPhrase" placeholder="twelve or twenty-four words here"></textarea>
+          <label for="restorePassword">New wallet password</label>
+          <input id="restorePassword" type="password" placeholder="Choose a password">
+          <button id="restoreWallet">Restore Wallet</button>
+        </div>
+
+        <hr>
+
+        <label for="walletPassword">Unlock password</label>
+        <input id="walletPassword" type="password" placeholder="Enter wallet password">
+        <div class="actions">
+          <button id="unlockWallet">Unlock Wallet</button>
+          <button id="lockWallet">Lock</button>
+        </div>
+
+        <hr>
+
+        <label for="walletName">Wallet name</label>
+        <input id="walletName" placeholder="Kentrin Wallet">
+        <button id="saveWalletName">Save Wallet Name</button>
+      </div>
+
+      <div class="card stack">
+        <h3>Wallet Identity</h3>
+        <div class="kv"><div>Name</div><div id="walletNameView">—</div></div>
+        <div class="kv"><div>Status</div><div id="walletStatus">No wallet</div></div>
+        <div class="kv"><div>Address</div><div id="walletAddress" class="mono">—</div></div>
+
+        <label for="recoveryPreview">Recovery phrase (shown only after create)</label>
+        <textarea id="recoveryPreview" readonly placeholder="Create a wallet to reveal phrase once."></textarea>
+        <div class="actions">
+          <button id="copyAddress">Copy Address</button>
+          <button id="clearWallet" class="danger">Delete Local Wallet</button>
+        </div>
+        <p class="note">This starter keeps the unlocked signing material only in extension session state. The saved wallet blob is encrypted in local extension storage.</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card stack">
+        <h3>Local Explorer</h3>
+        <label for="apiBase">API base URL</label>
+        <input id="apiBase" placeholder="https://www.kentrin.com">
+
+        <div class="actions">
+          <button id="scanNotes">Scan Notes</button>
+          <button id="loadAddressNotes">Load Cached Notes</button>
+        </div>
+
+        <div class="kv"><div>Current owner</div><div id="currentOwner" class="mono">—</div></div>
+        <div class="kv"><div>Cached count</div><div id="cachedCount">0</div></div>
+
+        <label for="notesJson">Cached notes / explorer output</label>
+        <textarea id="notesJson" readonly></textarea>
+      </div>
+
+      <div class="card stack">
+        <h3>Send</h3>
+        <label for="noteId">note_id</label>
+        <input id="noteId" placeholder="64-char note id">
+
+        <label for="recipient">Recipient KU address</label>
+        <input id="recipient" placeholder="KU1...">
+
+        <div class="actions">
+          <button id="previewSend">Preview Signed Transfer</button>
+          <button id="submitSend" class="primary">Submit Transfer</button>
+        </div>
+
+        <label for="sendPreview">Signed transfer preview</label>
+        <textarea id="sendPreview" readonly></textarea>
+      </div>
+    </div>
+
+    <div class="card stack">
+      <h3>Output</h3>
+      <div class="output" id="output">Ready.</div>
+    </div>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

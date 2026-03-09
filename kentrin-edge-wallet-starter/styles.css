@@ -1,0 +1,177 @@
+:root{
+  --bg:#050505;
+  --panel:#0d0d0d;
+  --panel-2:#111;
+  --line:#2b2b2b;
+  --text:#e9e9e9;
+  --muted:#9f9f9f;
+  --accent:#7aa2ff;
+  --danger:#ff6b6b;
+  --ok:#78d89b;
+}
+
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  padding:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+
+body{
+  min-width:360px;
+}
+
+.app{
+  padding:16px;
+}
+
+h1,h2,h3{
+  margin:0 0 10px;
+}
+
+p{
+  margin:0 0 12px;
+  color:var(--muted);
+  line-height:1.45;
+}
+
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  margin-bottom:14px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+@media (max-width: 720px){
+  .row{ grid-template-columns:1fr; }
+}
+
+label{
+  display:block;
+  margin:10px 0 6px;
+  color:var(--muted);
+  font-size:13px;
+}
+
+input, textarea, button{
+  width:100%;
+  background:#0e0e0e;
+  color:var(--text);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  font:inherit;
+}
+
+textarea{
+  min-height:88px;
+  resize:vertical;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+input[readonly], textarea[readonly]{
+  background:#0a0a0a;
+}
+
+button{
+  cursor:pointer;
+  font-weight:700;
+}
+
+button:hover{
+  background:#161616;
+}
+
+button.primary{
+  background:#f0f0f0;
+  color:#000;
+  border-color:#f0f0f0;
+}
+
+button.ghost{
+  background:#0d0d0d;
+}
+
+button.danger{
+  border-color:#4d1c1c;
+  background:#1a0f0f;
+  color:#fff;
+}
+
+button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+.stack > * + *{
+  margin-top:10px;
+}
+
+.mono{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  word-break:break-word;
+}
+
+.kv{
+  display:grid;
+  grid-template-columns:140px 1fr;
+  gap:8px;
+  align-items:start;
+  margin:8px 0;
+}
+
+.badge{
+  display:inline-block;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:12px;
+  color:var(--muted);
+  margin-right:6px;
+}
+
+.output{
+  white-space:pre-wrap;
+  word-break:break-word;
+  background:#090909;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  min-height:120px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+.actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.actions > *{
+  flex:1 1 140px;
+}
+
+.note{
+  font-size:12px;
+  color:var(--muted);
+}
+
+hr{
+  border:none;
+  border-top:1px solid var(--line);
+  margin:14px 0;
+}
+
+.hidden{
+  display:none !important;
+}

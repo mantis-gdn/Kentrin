@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kentrin Wallet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h2>Kentrin Wallet</h2>
+      <p>Edge extension starter shell for Kentrin. Create or restore a wallet, then open the full dashboard.</p>
+      <div class="actions">
+        <button id="openOptions" class="primary">Open Wallet Dashboard</button>
+        <button id="refreshState">Refresh</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Status</h3>
+      <div class="kv"><div>Wallet</div><div id="walletState">Not created</div></div>
+      <div class="kv"><div>Address</div><div id="address" class="mono">—</div></div>
+      <div class="kv"><div>Lock</div><div id="lockState">Locked / no session</div></div>
+      <div class="actions">
+        <button id="lockBtn">Lock</button>
+        <button id="clearSessionBtn" class="ghost">Clear Session</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Quick Actions</h3>
+      <div class="actions">
+        <button id="scanBtn">Scan Notes</button>
+        <button id="sendBtn">Open Send View</button>
+      </div>
+      <p class="note">The popup stays lean on purpose. The heavy lifting lives on the full dashboard page.</p>
+    </div>
+
+    <div class="output" id="output">Ready.</div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

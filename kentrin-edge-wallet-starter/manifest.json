@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Kentrin Wallet",
+  "version": "0.1.0",
+  "description": "Edge extension starter wallet for Kentrin.",
+  "action": {
+    "default_title": "Kentrin Wallet",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.kentrin.com/*",
+    "https://kentrin.com/*",
+    "http://localhost:8888/*",
+    "http://127.0.0.1:8888/*"
+  ]
+}
