@@ -2,182 +2,121 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Kentrin Test Wallet</title>
+<title>Kentrin Wallet</title>
 
 <style>
-body{
- background:#000;
- color:#e6e6e6;
- font-family:system-ui;
- max-width:700px;
- margin:auto;
- padding:20px;
-}
-
-input,textarea,button{
- width:100%;
- padding:10px;
- margin:8px 0;
- background:#111;
- color:#e6e6e6;
- border:1px solid #333;
- border-radius:8px;
- font-family:monospace;
-}
-
-button{
- cursor:pointer;
-}
-
-pre{
- background:#111;
- border:1px solid #333;
- padding:12px;
- border-radius:10px;
-}
+body{background:#000;color:#e6e6e6;font-family:system-ui;max-width:650px;margin:auto;padding:20px}
+input,textarea,button{width:100%;margin:8px 0;padding:10px;background:#111;color:#e6e6e6;border:1px solid #333;border-radius:6px;font-family:monospace}
+pre{background:#111;padding:10px;border-radius:6px}
 </style>
 </head>
 
 <body>
 
-<h1>Kentrin Test Wallet</h1>
+<h2>Kentrin Wallet</h2>
 
 <button id="gen">Generate Wallet</button>
 
-<label>Address</label>
-<input id="addr" readonly>
-
-<label>Public Key</label>
-<textarea id="pub" rows="5" readonly></textarea>
+<input id="addr" placeholder="address" readonly>
+<textarea id="pub" placeholder="public key"></textarea>
 
 <hr>
 
-<label>note_id</label>
-<input id="note">
-
-<label>to address</label>
-<input id="to">
-
-<label>nonce</label>
+<input id="note" placeholder="note_id">
+<input id="to" placeholder="recipient address">
 <input id="nonce" value="test123">
 
-<button id="sign">Sign Transfer</button>
+<button id="sign">Sign</button>
 
-<label>canonical message</label>
-<textarea id="canon" rows="3"></textarea>
+<textarea id="msg" placeholder="canonical message"></textarea>
+<textarea id="sig" placeholder="signature"></textarea>
 
-<label>signature</label>
-<textarea id="sig" rows="3"></textarea>
-
-<button id="send">Send Transfer</button>
+<button id="send">Send</button>
 
 <pre id="out"></pre>
 
 <script>
 
-const $ = id => document.getElementById(id)
+const $=id=>document.getElementById(id)
 
-let keypair=null
-let ts=null
+let kp,ts
 
-function now(){
- return Math.floor(Date.now()/1000)
+const now=()=>Math.floor(Date.now()/1000)
+
+const sha256=async b=>{
+ const h=await crypto.subtle.digest("SHA-256",b)
+ return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")
 }
 
-function canonical(note,from,to,ts,nonce){
- return `KU|v1|TRANSFER|${note}|${from}|${to}|${ts}|${nonce}`
-}
-
-function buf2b64(buf){
- const bytes=new Uint8Array(buf)
+const b64=b=>{
  let s=""
- for(let b of bytes) s+=String.fromCharCode(b)
+ for(const c of new Uint8Array(b))s+=String.fromCharCode(c)
  return btoa(s)
 }
 
-async function sha256(buf){
- const hash=await crypto.subtle.digest("SHA-256",buf)
- return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("")
-}
-
-async function deriveAddr(pub){
+const addr=async pub=>{
  const spki=await crypto.subtle.exportKey("spki",pub)
- const hex=await sha256(spki)
- return "KU1"+hex.slice(0,40)
+ const h=await sha256(spki)
+ return "KU1"+h.slice(0,40)
 }
 
-async function exportPem(pub){
+const pem=async pub=>{
  const spki=await crypto.subtle.exportKey("spki",pub)
- const b64=buf2b64(spki)
- const lines=b64.match(/.{1,64}/g)
- return "-----BEGIN PUBLIC KEY-----\n"+lines.join("\n")+"\n-----END PUBLIC KEY-----"
+ const base=b64(spki).match(/.{1,64}/g).join("\n")
+ return `-----BEGIN PUBLIC KEY-----\n${base}\n-----END PUBLIC KEY-----`
 }
 
-$("#gen").onclick = async () => {
+document.addEventListener("DOMContentLoaded",()=>{
 
- keypair = await crypto.subtle.generateKey(
-  {name:"Ed25519"},
-  true,
-  ["sign","verify"]
- )
-
- const addr = await deriveAddr(keypair.publicKey)
- const pem = await exportPem(keypair.publicKey)
-
- $("#addr").value = addr
- $("#pub").value = pem
-
- $("#out").textContent="wallet generated"
+$("#gen").onclick=async()=>{
+ kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])
+ $("#addr").value=await addr(kp.publicKey)
+ $("#pub").value=await pem(kp.publicKey)
 }
 
-$("#sign").onclick = async () => {
-
- if(!keypair) return
-
- const note=$("#note").value.trim()
- const from=$("#addr").value.trim()
- const to=$("#to").value.trim()
- const nonce=$("#nonce").value.trim()
+$("#sign").onclick=async()=>{
+ const note=$("#note").value
+ const from=$("#addr").value
+ const to=$("#to").value
+ const nonce=$("#nonce").value
 
  ts=now()
 
- const msg=canonical(note,from,to,ts,nonce)
+ const msg=`KU|v1|TRANSFER|${note}|${from}|${to}|${ts}|${nonce}`
 
- $("#canon").value=msg
+ $("#msg").value=msg
 
  const sig=await crypto.subtle.sign(
   {name:"Ed25519"},
-  keypair.privateKey,
+  kp.privateKey,
   new TextEncoder().encode(msg)
  )
 
- $("#sig").value=buf2b64(sig)
-
- $("#out").textContent="message signed"
+ $("#sig").value=b64(sig)
 }
 
-$("#send").onclick = async () => {
+$("#send").onclick=async()=>{
 
  const body={
-  note_id:$("#note").value.trim(),
-  from:$("#addr").value.trim(),
-  to:$("#to").value.trim(),
-  ts:ts,
-  nonce:$("#nonce").value.trim(),
-  from_public_key_pem:$("#pub").value.trim(),
-  signature_b64:$("#sig").value.trim()
+  note_id:$("#note").value,
+  from:$("#addr").value,
+  to:$("#to").value,
+  ts,
+  nonce:$("#nonce").value,
+  from_public_key_pem:$("#pub").value,
+  signature_b64:$("#sig").value
  }
 
- const res = await fetch("/.netlify/functions/ledger-submit",{
+ const r=await fetch("/.netlify/functions/ledger-submit",{
   method:"POST",
   headers:{"Content-Type":"application/json"},
   body:JSON.stringify(body)
  })
 
- const text = await res.text()
-
- $("#out").textContent=text
+ $("#out").textContent=await r.text()
 }
+
+})
 
 </script>
 
