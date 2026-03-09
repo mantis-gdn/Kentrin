@@ -85,7 +85,6 @@ margin-top:10px;
 
 <pre id="out"></pre>
 
-
 <script>
 
 const genA = document.getElementById("genA")
@@ -104,16 +103,19 @@ let B = {}
 
 let running = false
 
+
 function b64(buf){
 let s=""
 for(const b of new Uint8Array(buf)) s+=String.fromCharCode(b)
 return btoa(s)
 }
 
+
 async function sha256(buf){
 const h = await crypto.subtle.digest("SHA-256",buf)
 return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")
 }
+
 
 async function address(pub){
 
@@ -124,6 +126,7 @@ const hex = await sha256(spki)
 return "KU1"+hex.slice(0,40)
 
 }
+
 
 async function pem(pub){
 
@@ -136,6 +139,7 @@ ${base}
 -----END PUBLIC KEY-----`
 
 }
+
 
 async function generate(wallet,addrField,pubField){
 
@@ -153,12 +157,15 @@ document.getElementById(pubField).value = wallet.pem
 
 }
 
+
 genA.addEventListener("click", ()=>generate(A,"addrA","pubA"))
 genB.addEventListener("click", ()=>generate(B,"addrB","pubB"))
+
 
 function now(){
 return Math.floor(Date.now()/1000)
 }
+
 
 async function transfer(from,to){
 
@@ -175,23 +182,27 @@ const ts = now()
 
 const msg = `KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`
 
+
 const sig = await crypto.subtle.sign(
 {name:"Ed25519"},
 from.kp.privateKey,
 new TextEncoder().encode(msg)
 )
 
+
 const body = {
 
-note_id:note,
-from:from.addr,
-to:to.addr,
+note_id: note,
+from: from.addr,
+to: to.addr,
+denom: 1,
 ts,
 nonce,
-from_public_key_pem:from.pem,
-signature_b64:b64(sig)
+from_public_key_pem: from.pem,
+signature_b64: b64(sig)
 
 }
+
 
 const r = await fetch("/.netlify/functions/ledger-submit",{
 
@@ -201,12 +212,15 @@ body:JSON.stringify(body)
 
 })
 
+
 out.textContent = await r.text()
 
 }
 
+
 AtoB.addEventListener("click", ()=>transfer(A,B))
 BtoA.addEventListener("click", ()=>transfer(B,A))
+
 
 ping.addEventListener("click", async ()=>{
 
@@ -225,6 +239,7 @@ await new Promise(r=>setTimeout(r,1200))
 }
 
 })
+
 
 stop.addEventListener("click", ()=>running=false)
 
