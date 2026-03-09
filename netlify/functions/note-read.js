@@ -25,10 +25,10 @@ exports.handler = async (event) => {
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASS,
-      database: process.env.DB_NAME
+      database: process.env.DB_NAME,
+      ssl: {}
     });
 
-    // Find all events for this note, newest first
     const [rows] = await db.execute(
       `
       SELECT
@@ -53,23 +53,19 @@ exports.handler = async (event) => {
     );
 
     if (!rows.length) {
-      return json(404, { error: "NOTE_NOT_FOUND", note_id });
+      return json(404, {
+        error: "NOTE_NOT_FOUND",
+        note_id
+      });
     }
 
     const latest = rows[0];
-
-    // Denom should be stable across events for the same note.
-    // Use the oldest known row if you want "original", but since it's stable,
-    // grabbing from any row is fine. We'll use the latest non-null denom.
-    const denomRow = rows.find(r => r.denom !== null && r.denom !== undefined) || rows[0];
-    const denom = Number(denomRow.denom);
-
-    // Find issuance / mint-style origin if present
     const oldest = rows[rows.length - 1];
+    const denomRow = rows.find(r => r.denom !== null && r.denom !== undefined) || latest;
 
     return json(200, {
       note_id,
-      denom,
+      denom: Number(denomRow.denom),
       event_count: rows.length,
       issued_to: oldest.to_address || null,
       current_owner: latest.to_address || null,
