@@ -24,11 +24,31 @@ exports.handler = async (event) => {
       });
     }
 
+    const {
+      DB_HOST,
+      DB_USERNAME,
+      DB_PASSWORD,
+      DB_NAME
+    } = process.env;
+
+    const missingEnv = [];
+    if (!DB_HOST) missingEnv.push("DB_HOST");
+    if (!DB_USERNAME) missingEnv.push("DB_USERNAME");
+    if (!DB_PASSWORD) missingEnv.push("DB_PASSWORD");
+    if (!DB_NAME) missingEnv.push("DB_NAME");
+
+    if (missingEnv.length) {
+      return json(500, {
+        error: "MISSING_DB_ENV_VARS",
+        missing: missingEnv
+      });
+    }
+
     db = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASS,
-      database: process.env.DB_NAME,
+      host: DB_HOST,
+      user: DB_USERNAME,
+      password: DB_PASSWORD,
+      database: DB_NAME,
       ssl: {}
     });
 
@@ -85,8 +105,7 @@ exports.handler = async (event) => {
       code: err.code || null,
       errno: err.errno || null,
       sqlState: err.sqlState || null,
-      sqlMessage: err.sqlMessage || null,
-      stack: err.stack || null
+      sqlMessage: err.sqlMessage || null
     });
   } finally {
     if (db) {
