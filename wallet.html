@@ -1,758 +1,179 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kentrin Wallet</title>
-  <style>
-    :root {
-      --bg: #000;
-      --panel: #0d0d0d;
-      --panel-2: #121212;
-      --text: #e6e6e6;
-      --muted: #9a9a9a;
-      --line: #2a2a2a;
-      --accent: #f0f0f0;
-      --danger: #ff6b6b;
-      --success: #7dffb3;
-    }
+<meta charset="utf-8">
+<title>Kentrin Simple Wallet</title>
 
-    * { box-sizing: border-box; }
+<style>
+body{
+  background:#000;
+  color:#e6e6e6;
+  font-family:system-ui;
+  max-width:800px;
+  margin:auto;
+  padding:20px;
+}
 
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
+input, textarea, button{
+  width:100%;
+  padding:10px;
+  margin:8px 0;
+  background:#111;
+  color:#e6e6e6;
+  border:1px solid #333;
+  border-radius:8px;
+  font-family:monospace;
+}
 
-    .wrap {
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 24px;
-    }
+button{cursor:pointer}
 
-    h1, h2, h3 { margin: 0 0 10px; }
-
-    .small {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .grid {
-      display: grid;
-      gap: 16px;
-    }
-
-    .card {
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-    }
-
-    .row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    @media (max-width: 700px) {
-      .row { grid-template-columns: 1fr; }
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      color: var(--muted);
-      margin: 0 0 6px;
-    }
-
-    input, textarea, button, select {
-      width: 100%;
-      border-radius: 12px;
-      border: 1px solid #303030;
-      background: #101010;
-      color: var(--text);
-      padding: 11px 12px;
-      font: inherit;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 88px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-
-    input[readonly], textarea[readonly] {
-      background: #0a0a0a;
-      color: #cfcfcf;
-    }
-
-    button {
-      cursor: pointer;
-      font-weight: 700;
-      background: #171717;
-      transition: 120ms ease;
-    }
-
-    button:hover { background: #202020; }
-    button:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      background: #e6e6e6;
-      color: #000;
-      border-color: #e6e6e6;
-    }
-
-    .btn-primary:hover { background: #fff; }
-
-    .btn-danger {
-      color: #fff;
-      border-color: #4d1e1e;
-      background: #211111;
-    }
-
-    .stack > * + * { margin-top: 12px; }
-
-    .wallet-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted);
-      padding: 8px 10px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #0b0b0b;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: #666;
-    }
-
-    .dot.ok { background: var(--success); }
-    .dot.bad { background: var(--danger); }
-
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      word-break: break-all;
-    }
-
-    pre {
-      margin: 0;
-      background: #090909;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 14px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      min-height: 180px;
-    }
-
-    .pillbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-    }
-
-    .pill {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: var(--muted);
-      background: #0b0b0b;
-    }
-  </style>
+pre{
+  background:#111;
+  border:1px solid #333;
+  padding:12px;
+  border-radius:10px;
+}
+</style>
 </head>
+
 <body>
-  <div class="wrap grid">
-    <section class="wallet-head">
-      <div>
-        <h1>Kentrin Wallet</h1>
-        <div class="small">Single-wallet interface for generating one Ed25519 keypair, deriving one KU address, minting, transferring, and split-spending without letting the sender identity drift out of sync.</div>
-      </div>
-      <div class="status"><span id="statusDot" class="dot bad"></span><span id="statusText">No wallet loaded</span></div>
-    </section>
-
-    <section class="card stack">
-      <div>
-        <h2>Wallet Identity</h2>
-        <div class="small">This wallet keeps one active keypair in memory. Sender address and public key are derived from that keypair and treated as truth, not editable fiction.</div>
-      </div>
-
-      <div class="row">
-        <button id="btnGenerate" class="btn-primary">Generate New Wallet</button>
-        <button id="btnClear" class="btn-danger">Clear Wallet From Memory</button>
-      </div>
-
-      <div>
-        <label for="walletAddress">KU Address</label>
-        <textarea id="walletAddress" rows="2" readonly></textarea>
-      </div>
-
-      <div>
-        <label for="publicKeyPem">Public Key PEM</label>
-        <textarea id="publicKeyPem" rows="6" readonly></textarea>
-      </div>
-
-      <div class="pillbar">
-        <div class="pill">One active keypair</div>
-        <div class="pill">Ed25519 signing</div>
-        <div class="pill">Derived KU address lock</div>
-      </div>
-    </section>
-
-    <section class="card stack">
-      <div>
-        <h2>Current Note</h2>
-        <div class="small">This section tracks the one note currently sitting in the wallet. After a split spend, the wallet can move forward to the returned change note.</div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label for="currentNoteId">Current note_id</label>
-          <input id="currentNoteId" readonly />
-        </div>
-        <div>
-          <label for="currentNoteValue">Current value</label>
-          <input id="currentNoteValue" readonly />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label for="mintSecret">Treasury mint secret</label>
-          <input id="mintSecret" type="password" placeholder="Treasury mint secret" />
-        </div>
-        <div>
-          <label for="mintDenom">Mint denomination</label>
-          <input id="mintDenom" type="number" min="1" value="10" />
-        </div>
-      </div>
-
-      <button id="btnMint">Mint Test Bill To This Wallet</button>
-    </section>
-
-    <section class="card stack">
-      <div>
-        <h2>Transfer Full Note</h2>
-        <div class="small">Moves the entire current note to another KU address.</div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label for="transferTo">Recipient KU address</label>
-          <input id="transferTo" placeholder="KU1..." />
-        </div>
-        <div>
-          <label for="transferNonce">Nonce</label>
-          <input id="transferNonce" placeholder="transfer nonce" value="transfer-001" />
-        </div>
-      </div>
-
-      <button id="btnSignTransfer">Sign Transfer</button>
-
-      <div>
-        <label for="transferCanonical">Canonical transfer message</label>
-        <textarea id="transferCanonical" rows="4" readonly></textarea>
-      </div>
-
-      <div>
-        <label for="transferSig">Transfer signature (base64)</label>
-        <textarea id="transferSig" rows="3" readonly></textarea>
-      </div>
-
-      <button id="btnSubmitTransfer">Submit Transfer</button>
-    </section>
-
-    <section class="card stack">
-      <div>
-        <h2>Split Spend</h2>
-        <div class="small">Spend part of the current note to a recipient and return the change back to this same wallet.</div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label for="spendRecipient">Recipient KU address</label>
-          <input id="spendRecipient" placeholder="KU1..." />
-        </div>
-        <div>
-          <label for="spendAmount">Amount to send</label>
-          <input id="spendAmount" type="number" min="1" />
-        </div>
-      </div>
-
-      <div>
-        <label for="spendNonce">Nonce</label>
-        <input id="spendNonce" placeholder="spend nonce" />
-      </div>
-
-      <button id="btnSignSpend">Sign Split Spend</button>
-
-      <div>
-        <label for="spendCanonical">Canonical spend message</label>
-        <textarea id="spendCanonical" rows="5" readonly></textarea>
-      </div>
-
-      <div>
-        <label for="spendSig">Spend signature (base64)</label>
-        <textarea id="spendSig" rows="3" readonly></textarea>
-      </div>
-
-      <button id="btnSubmitSpend">Submit Split Spend</button>
-    </section>
-
-    <section class="card stack">
-      <div>
-        <h2>Output</h2>
-        <div class="small">Server responses, errors, and wallet state updates land here.</div>
-      </div>
-      <pre id="output">Output will appear here...</pre>
-    </section>
-  </div>
-
-  <script>
-    const $ = (id) => document.getElementById(id);
-
-    const state = {
-      keypair: null,
-      currentNoteId: "",
-      currentNoteValue: null,
-      lastTransferTs: null,
-      lastSpendTs: null,
-      lastSpendOutputs: null
-    };
-
-    const GENESIS = 1704067200;
-    const EPOCH_INDEX = 0;
-
-    function out(message) {
-      $("output").textContent = typeof message === "string" ? message : JSON.stringify(message, null, 2);
-    }
-
-    function setStatus(loaded) {
-      $("statusDot").className = `dot ${loaded ? "ok" : "bad"}`;
-      $("statusText").textContent = loaded ? "Wallet loaded" : "No wallet loaded";
-    }
-
-    function nowUnix() {
-      return Math.floor(Date.now() / 1000);
-    }
-
-    function bufferToBase64(buffer) {
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      return btoa(binary);
-    }
-
-    function base64ToPem(base64, label) {
-      const lines = base64.match(/.{1,64}/g) || [];
-      return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
-    }
-
-    async function exportPublicKeyPem(publicKey) {
-      const spki = await crypto.subtle.exportKey("spki", publicKey);
-      return base64ToPem(bufferToBase64(spki), "PUBLIC KEY");
-    }
-
-    async function sha256Hex(bytes) {
-      const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
-      return Array.from(new Uint8Array(hashBuf))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    }
-
-    async function sha256HexFromString(s) {
-      return await sha256Hex(new TextEncoder().encode(s));
-    }
-
-    async function deriveKUAddress(publicKey) {
-      const spki = await crypto.subtle.exportKey("spki", publicKey);
-      const hex = await sha256Hex(spki);
-      return "KU1" + hex.slice(0, 40);
-    }
-
-    async function canonicalMintNoteId({ genesis, epoch_index, denom, owner_address, mint_nonce }) {
-      const canonical = `KU|v1|MINT|${genesis}|${epoch_index}|${denom}|${owner_address}|${mint_nonce}`;
-      return await sha256HexFromString(canonical);
-    }
-
-    function canonicalTransferMessage({ note_id, from, to, ts, nonce }) {
-      return `KU|v1|TRANSFER|${note_id}|${from}|${to}|${ts}|${nonce}`;
-    }
-
-    function canonicalSpendMessage({ input_note_id, from, outputs, ts, nonce }) {
-      const outputPart = outputs.map((o, i) => `${i}:${o.to}:${o.value}`).join("|");
-      return `KU|v1|SPEND|${input_note_id}|${from}|${ts}|${nonce}|${outputPart}`;
-    }
-
-    async function requireWallet() {
-      if (!state.keypair) throw new Error("Generate wallet first.");
-      return state.keypair;
-    }
-
-    async function getActiveAddress() {
-      await requireWallet();
-      const addr = await deriveKUAddress(state.keypair.publicKey);
-      $("walletAddress").value = addr;
-      return addr;
-    }
-
-    async function getActivePublicKeyPem() {
-      await requireWallet();
-      const pem = await exportPublicKeyPem(state.keypair.publicKey);
-      $("publicKeyPem").value = pem;
-      return pem;
-    }
-
-    function syncCurrentNoteFields() {
-      $("currentNoteId").value = state.currentNoteId || "";
-      $("currentNoteValue").value = state.currentNoteValue ?? "";
-    }
-
-    function clearTransferFields() {
-      $("transferCanonical").value = "";
-      $("transferSig").value = "";
-      state.lastTransferTs = null;
-    }
-
-    function clearSpendFields() {
-      $("spendCanonical").value = "";
-      $("spendSig").value = "";
-      state.lastSpendTs = null;
-      state.lastSpendOutputs = null;
-    }
-
-    async function refreshWalletIdentity() {
-      if (!state.keypair) {
-        $("walletAddress").value = "";
-        $("publicKeyPem").value = "";
-        setStatus(false);
-        return;
-      }
-      await getActiveAddress();
-      await getActivePublicKeyPem();
-      setStatus(true);
-    }
-
-    $("btnGenerate").addEventListener("click", async () => {
-      try {
-        state.keypair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-        state.currentNoteId = "";
-        state.currentNoteValue = null;
-        clearTransferFields();
-        clearSpendFields();
-        syncCurrentNoteFields();
-        await refreshWalletIdentity();
-
-        const walletAddress = await getActiveAddress();
-        const mintNonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
-        const demoNoteId = await canonicalMintNoteId({
-          genesis: GENESIS,
-          epoch_index: EPOCH_INDEX,
-          denom: Number($("mintDenom").value || 10),
-          owner_address: walletAddress,
-          mint_nonce: mintNonce
-        });
-
-        out(
-          `Single wallet generated.\n` +
-          `Address: ${walletAddress}\n` +
-          `Preview note_id: ${demoNoteId}\n\n` +
-          `Next move: mint a real note into this wallet.`
-        );
-      } catch (err) {
-        out("Wallet generation error: " + err.message);
-      }
-    });
-
-    $("btnClear").addEventListener("click", async () => {
-      state.keypair = null;
-      state.currentNoteId = "";
-      state.currentNoteValue = null;
-      clearTransferFields();
-      clearSpendFields();
-      syncCurrentNoteFields();
-      await refreshWalletIdentity();
-      out("Wallet cleared from memory.");
-    });
-
-    $("btnMint").addEventListener("click", async () => {
-      try {
-        const to_public_key_pem = await getActivePublicKeyPem();
-        const denom = Number($("mintDenom").value);
-        const treasury_mint_secret = $("mintSecret").value.trim();
-
-        if (!Number.isInteger(denom) || denom <= 0) throw new Error("Mint denomination must be a positive integer.");
-        if (!treasury_mint_secret) throw new Error("Enter treasury mint secret first.");
-
-        const response = await fetch("/.netlify/functions/treasury-mint-test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to_public_key_pem,
-            denom,
-            epoch_index: EPOCH_INDEX,
-            genesis: GENESIS,
-            treasury_mint_secret
-          })
-        });
-
-        const text = await response.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          out(`Mint returned non-JSON:\n${text}`);
-          return;
-        }
-
-        if (!response.ok) {
-          out(data);
-          return;
-        }
-
-        state.currentNoteId = data.note_id || "";
-        state.currentNoteValue = Number(data.denom);
-        syncCurrentNoteFields();
-        clearTransferFields();
-        clearSpendFields();
-
-        out(
-          `Treasury mint successful.\n` +
-          `To: ${data.to_address}\n` +
-          `Denom: ${data.denom}\n` +
-          `note_id: ${data.note_id}\n` +
-          `txid: ${data.txid}`
-        );
-      } catch (err) {
-        out("Mint error: " + err.message);
-      }
-    });
-
-    $("btnSignTransfer").addEventListener("click", async () => {
-      try {
-        await requireWallet();
-        if (!state.currentNoteId) throw new Error("No current note loaded.");
-
-        const from = await getActiveAddress();
-        const to = $("transferTo").value.trim();
-        const nonce = $("transferNonce").value.trim();
-        const ts = nowUnix();
-
-        if (!/^KU1[a-f0-9]{40}$/i.test(from)) throw new Error("Derived sender address is invalid.");
-        if (!/^KU1[a-f0-9]{40}$/i.test(to)) throw new Error("Recipient address must be a KU1 address.");
-        if (!nonce) throw new Error("Transfer nonce is required.");
-
-        const message = canonicalTransferMessage({
-          note_id: state.currentNoteId,
-          from,
-          to,
-          ts,
-          nonce
-        });
-
-        const sig = await crypto.subtle.sign(
-          { name: "Ed25519" },
-          state.keypair.privateKey,
-          new TextEncoder().encode(message)
-        );
-
-        $("transferCanonical").value = message;
-        $("transferSig").value = bufferToBase64(sig);
-        state.lastTransferTs = ts;
-        out("Transfer message signed.");
-      } catch (err) {
-        out("Transfer signing error: " + err.message);
-      }
-    });
-
-    $("btnSubmitTransfer").addEventListener("click", async () => {
-      try {
-        await requireWallet();
-        if (!state.currentNoteId) throw new Error("No current note loaded.");
-        if (!$("transferSig").value.trim()) throw new Error("Sign transfer first.");
-
-        const body = {
-          note_id: state.currentNoteId,
-          denom: state.currentNoteValue,
-          from: await getActiveAddress(),
-          to: $("transferTo").value.trim(),
-          ts: state.lastTransferTs ?? nowUnix(),
-          nonce: $("transferNonce").value.trim(),
-          from_public_key_pem: await getActivePublicKeyPem(),
-          signature_b64: $("transferSig").value.trim()
-        };
-
-        const response = await fetch("/.netlify/functions/ledger-submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-
-        const text = await response.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          out(text);
-          return;
-        }
-
-        if (!response.ok) {
-          out(data);
-          return;
-        }
-
-        state.currentNoteId = "";
-        state.currentNoteValue = null;
-        syncCurrentNoteFields();
-        clearTransferFields();
-        clearSpendFields();
-        out(data);
-      } catch (err) {
-        out("Transfer submit error: " + err.message);
-      }
-    });
-
-    $("btnSignSpend").addEventListener("click", async () => {
-      try {
-        await requireWallet();
-        if (!state.currentNoteId) throw new Error("No current note loaded.");
-        if (!Number.isInteger(state.currentNoteValue) || state.currentNoteValue <= 0) {
-          throw new Error("Current note value is invalid.");
-        }
-
-        const from = await getActiveAddress();
-        const recipient = $("spendRecipient").value.trim();
-        const sendAmount = Number($("spendAmount").value);
-        const nonce = $("spendNonce").value.trim() || `spend-${crypto.getRandomValues(new Uint32Array(1))[0].toString(16)}`;
-        const ts = nowUnix();
-
-        if (!/^KU1[a-f0-9]{40}$/i.test(recipient)) throw new Error("Recipient address must be a KU1 address.");
-        if (!Number.isInteger(sendAmount) || sendAmount <= 0) throw new Error("Send amount must be a positive integer.");
-        if (sendAmount >= state.currentNoteValue) throw new Error("Send amount must be less than full note value for split spend.");
-
-        const change = state.currentNoteValue - sendAmount;
-        const outputs = [
-          { to: recipient, value: sendAmount },
-          { to: from, value: change }
-        ];
-
-        const message = canonicalSpendMessage({
-          input_note_id: state.currentNoteId,
-          from,
-          outputs,
-          ts,
-          nonce
-        });
-
-        const sig = await crypto.subtle.sign(
-          { name: "Ed25519" },
-          state.keypair.privateKey,
-          new TextEncoder().encode(message)
-        );
-
-        $("spendNonce").value = nonce;
-        $("spendCanonical").value = message;
-        $("spendSig").value = bufferToBase64(sig);
-        state.lastSpendTs = ts;
-        state.lastSpendOutputs = outputs;
-
-        out(
-          `Split spend prepared.\n` +
-          `Input: ${state.currentNoteValue}\n` +
-          `Send: ${sendAmount}\n` +
-          `Change: ${change}`
-        );
-      } catch (err) {
-        out("Split spend signing error: " + err.message);
-      }
-    });
-
-    $("btnSubmitSpend").addEventListener("click", async () => {
-      try {
-        await requireWallet();
-        if (!state.currentNoteId) throw new Error("No current note loaded.");
-        if (!state.lastSpendOutputs || !state.lastSpendOutputs.length) throw new Error("Sign split spend first.");
-        if (!$("spendSig").value.trim()) throw new Error("Missing spend signature.");
-
-        const myAddress = await getActiveAddress();
-        const body = {
-          input_note_id: state.currentNoteId,
-          from: myAddress,
-          ts: state.lastSpendTs ?? nowUnix(),
-          nonce: $("spendNonce").value.trim(),
-          from_public_key_pem: await getActivePublicKeyPem(),
-          outputs: state.lastSpendOutputs,
-          signature_b64: $("spendSig").value.trim()
-        };
-
-        const response = await fetch("/.netlify/functions/spend-submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-
-        const text = await response.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          out(text);
-          return;
-        }
-
-        if (!response.ok) {
-          out(data);
-          return;
-        }
-
-        const possibleOutputs = Array.isArray(data.outputs) ? data.outputs : [];
-        const changeOutput = possibleOutputs.find((o) => o && o.to === myAddress);
-
-        if (changeOutput && changeOutput.note_id) {
-          state.currentNoteId = changeOutput.note_id;
-          state.currentNoteValue = Number(changeOutput.value);
-        } else {
-          state.currentNoteId = "";
-          state.currentNoteValue = null;
-        }
-
-        syncCurrentNoteFields();
-        clearTransferFields();
-        clearSpendFields();
-        out(data);
-      } catch (err) {
-        out("Split spend submit error: " + err.message);
-      }
-    });
-
-    syncCurrentNoteFields();
-    refreshWalletIdentity();
-  </script>
+
+<h1>Kentrin Simple Wallet</h1>
+
+<button id="gen">Generate Wallet</button>
+
+<label>Address</label>
+<input id="addr" readonly>
+
+<label>Public Key PEM</label>
+<textarea id="pub" rows="6" readonly></textarea>
+
+<hr>
+
+<label>note_id</label>
+<input id="note">
+
+<label>to address</label>
+<input id="to">
+
+<label>nonce</label>
+<input id="nonce" value="test123">
+
+<button id="sign">Sign Transfer</button>
+
+<label>canonical</label>
+<textarea id="canon"></textarea>
+
+<label>signature</label>
+<textarea id="sig"></textarea>
+
+<button id="send">Send Transfer</button>
+
+<pre id="out"></pre>
+
+<script>
+
+const $=id=>document.getElementById(id)
+
+let keypair=null
+let lastTS=null
+
+function now(){
+ return Math.floor(Date.now()/1000)
+}
+
+function canonical({note_id,from,to,ts,nonce}){
+ return `KU|v1|TRANSFER|${note_id}|${from}|${to}|${ts}|${nonce}`
+}
+
+function buf2b64(buf){
+ const bytes=new Uint8Array(buf)
+ let str=""
+ for(let b of bytes) str+=String.fromCharCode(b)
+ return btoa(str)
+}
+
+async function sha256(buf){
+ const hash=await crypto.subtle.digest("SHA-256",buf)
+ return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("")
+}
+
+async function deriveAddr(pub){
+ const spki=await crypto.subtle.exportKey("spki",pub)
+ const hex=await sha256(spki)
+ return "KU1"+hex.slice(0,40)
+}
+
+async function exportPem(pub){
+ const spki=await crypto.subtle.exportKey("spki",pub)
+ const b64=buf2b64(spki)
+ const lines=b64.match(/.{1,64}/g)
+ return "-----BEGIN PUBLIC KEY-----\n"+lines.join("\n")+"\n-----END PUBLIC KEY-----"
+}
+
+$("#gen").onclick=async()=>{
+
+ keypair=await crypto.subtle.generateKey(
+  {name:"Ed25519"},
+  true,
+  ["sign","verify"]
+ )
+
+ const addr=await deriveAddr(keypair.publicKey)
+ const pem=await exportPem(keypair.publicKey)
+
+ $("#addr").value=addr
+ $("#pub").value=pem
+}
+
+$("#sign").onclick=async()=>{
+
+ if(!keypair)return
+
+ const note=$("#note").value.trim()
+ const from=$("#addr").value.trim()
+ const to=$("#to").value.trim()
+ const nonce=$("#nonce").value.trim()
+
+ const ts=now()
+ lastTS=ts
+
+ const msg=canonical({note_id:note,from,to,ts,nonce})
+ $("#canon").value=msg
+
+ const sig=await crypto.subtle.sign(
+  {name:"Ed25519"},
+  keypair.privateKey,
+  new TextEncoder().encode(msg)
+ )
+
+ $("#sig").value=buf2b64(sig)
+}
+
+$("#send").onclick=async()=>{
+
+ const body={
+  note_id:$("#note").value.trim(),
+  from:$("#addr").value.trim(),
+  to:$("#to").value.trim(),
+  ts:lastTS,
+  nonce:$("#nonce").value.trim(),
+  from_public_key_pem:$("#pub").value.trim(),
+  signature_b64:$("#sig").value.trim()
+ }
+
+ const res=await fetch("/.netlify/functions/ledger-submit",{
+  method:"POST",
+  headers:{"Content-Type":"application/json"},
+  body:JSON.stringify(body)
+ })
+
+ const text=await res.text()
+
+ $("#out").textContent=text
+}
+
+</script>
+
 </body>
 </html>
