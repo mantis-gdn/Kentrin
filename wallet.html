@@ -204,7 +204,7 @@ async function loadNoteMetadata(){
   }
 
   if (!r.ok) {
-    throw new Error(data.error || "Failed to load note metadata.");
+    throw new Error(data.details || data.error || "Failed to load note metadata.");
   }
 
   denomEl.value = data.denom ?? "";
@@ -222,9 +222,9 @@ loadNoteBtn.addEventListener("click", async () => {
   }
 });
 
-async function transfer(from, to, fromLabel){
+async function transfer(from, to, fromLabel, toLabel){
   requireWallet(from, fromLabel);
-  requireWallet(to, to === A ? "Wallet A" : "Wallet B");
+  requireWallet(to, toLabel);
 
   const note = noteEl.value.trim();
   if (!note) {
@@ -240,8 +240,7 @@ async function transfer(from, to, fromLabel){
 
   if (meta.current_owner && meta.current_owner !== from.addr) {
     throw new Error(
-      `${fromLabel} is not current owner. ` +
-      `Ledger owner is ${meta.current_owner}`
+      `${fromLabel} is not current owner. Ledger owner is ${meta.current_owner}`
     );
   }
 
@@ -293,7 +292,7 @@ async function transfer(from, to, fromLabel){
 
 AtoB.addEventListener("click", async () => {
   try {
-    await transfer(A, B, "Wallet A");
+    await transfer(A, B, "Wallet A", "Wallet B");
   } catch (err) {
     writeOut({ error: err.message });
   }
@@ -301,7 +300,7 @@ AtoB.addEventListener("click", async () => {
 
 BtoA.addEventListener("click", async () => {
   try {
-    await transfer(B, A, "Wallet B");
+    await transfer(B, A, "Wallet B", "Wallet A");
   } catch (err) {
     writeOut({ error: err.message });
   }
@@ -313,11 +312,11 @@ ping.addEventListener("click", async () => {
 
   while (running) {
     try {
-      await transfer(A, B, "Wallet A");
+      await transfer(A, B, "Wallet A", "Wallet B");
       await new Promise(r => setTimeout(r, 1200));
       if (!running) break;
 
-      await transfer(B, A, "Wallet B");
+      await transfer(B, A, "Wallet B", "Wallet A");
       await new Promise(r => setTimeout(r, 1200));
     } catch (err) {
       writeOut({ error: err.message });

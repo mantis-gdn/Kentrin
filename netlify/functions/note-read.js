@@ -28,47 +28,56 @@ exports.handler = async (event) => {
       database: process.env.DB_NAME
     });
 
-    // 1) Find original denom from issuance row
-    // Adjust table/column names here if your schema differs.
-    const [issuanceRows] = await db.execute(
+    // Find all events for this note, newest first
+    const [rows] = await db.execute(
       `
-      SELECT note_id, denom, owner_address
-      FROM issuance
+      SELECT
+        event_index,
+        event_type,
+        note_id,
+        parent_note_id,
+        child_index,
+        denom,
+        from_address,
+        to_address,
+        ts,
+        nonce,
+        txid,
+        canonical_message,
+        created_at
+      FROM kentrin_events
       WHERE note_id = ?
-      LIMIT 1
+      ORDER BY ts DESC, event_index DESC
       `,
       [note_id]
     );
 
-    if (!issuanceRows.length) {
-      return json(404, { error: "NOTE_NOT_FOUND" });
+    if (!rows.length) {
+      return json(404, { error: "NOTE_NOT_FOUND", note_id });
     }
 
-    const issuance = issuanceRows[0];
+    const latest = rows[0];
 
-    // 2) Find latest owner from ledger row history
-    // Adjust table/column names here if your schema differs.
-    const [ledgerRows] = await db.execute(
-      `
-      SELECT note_id, owner_address, event_type, txid, ts
-      FROM ledger
-      WHERE note_id = ?
-      ORDER BY ts DESC, id DESC
-      LIMIT 1
-      `,
-      [note_id]
-    );
+    // Denom should be stable across events for the same note.
+    // Use the oldest known row if you want "original", but since it's stable,
+    // grabbing from any row is fine. We'll use the latest non-null denom.
+    const denomRow = rows.find(r => r.denom !== null && r.denom !== undefined) || rows[0];
+    const denom = Number(denomRow.denom);
 
-    const latest = ledgerRows[0] || null;
+    // Find issuance / mint-style origin if present
+    const oldest = rows[rows.length - 1];
 
     return json(200, {
       note_id,
-      denom: Number(issuance.denom),
-      issued_to: issuance.owner_address,
-      current_owner: latest?.owner_address || issuance.owner_address,
-      latest_event_type: latest?.event_type || "ISSUANCE",
-      latest_txid: latest?.txid || null,
-      latest_ts: latest?.ts || null
+      denom,
+      event_count: rows.length,
+      issued_to: oldest.to_address || null,
+      current_owner: latest.to_address || null,
+      latest_event_type: latest.event_type,
+      latest_txid: latest.txid,
+      latest_ts: latest.ts,
+      latest_from: latest.from_address || null,
+      latest_to: latest.to_address || null
     });
   } catch (err) {
     return json(500, {
@@ -77,7 +86,9 @@ exports.handler = async (event) => {
     });
   } finally {
     if (db) {
-      try { await db.end(); } catch {}
+      try {
+        await db.end();
+      } catch {}
     }
   }
 };
