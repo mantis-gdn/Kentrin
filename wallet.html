@@ -5,49 +5,67 @@
 <title>Kentrin Dev Tool</title>
 
 <style>
-
 body{
-background:#000;
-color:#e6e6e6;
-font-family:system-ui;
-max-width:900px;
-margin:auto;
-padding:20px;
+  background:#000;
+  color:#e6e6e6;
+  font-family:system-ui;
+  max-width:980px;
+  margin:auto;
+  padding:20px;
 }
 
 .row{
-display:flex;
-gap:20px;
+  display:flex;
+  gap:20px;
 }
 
 .wallet{
-flex:1;
-border:1px solid #333;
-padding:15px;
-border-radius:10px;
-background:#0b0b0b;
+  flex:1;
+  border:1px solid #333;
+  padding:15px;
+  border-radius:10px;
+  background:#0b0b0b;
 }
 
-input,textarea,button{
-width:100%;
-margin:6px 0;
-padding:10px;
-background:#111;
-color:#e6e6e6;
-border:1px solid #333;
-border-radius:6px;
-font-family:monospace;
+input, textarea, button{
+  width:100%;
+  margin:6px 0;
+  padding:10px;
+  background:#111;
+  color:#e6e6e6;
+  border:1px solid #333;
+  border-radius:6px;
+  font-family:monospace;
+  box-sizing:border-box;
 }
 
-button{cursor:pointer}
+button{ cursor:pointer; }
+
+button:hover{
+  background:#181818;
+}
 
 pre{
-background:#111;
-padding:10px;
-border-radius:6px;
-margin-top:10px;
+  background:#111;
+  padding:10px;
+  border-radius:6px;
+  margin-top:10px;
+  overflow:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
 }
 
+.meta{
+  display:grid;
+  grid-template-columns: 1fr 180px 180px;
+  gap:12px;
+  margin:14px 0;
+}
+
+@media (max-width: 800px){
+  .row{ flex-direction:column; }
+  .meta{ grid-template-columns:1fr; }
+}
 </style>
 </head>
 
@@ -57,25 +75,31 @@ margin-top:10px;
 
 <div class="row">
 
-<div class="wallet">
-<h3>Wallet A</h3>
-<button id="genA">Generate</button>
-<input id="addrA" placeholder="address">
-<textarea id="pubA" rows="4" placeholder="public key"></textarea>
-</div>
+  <div class="wallet">
+    <h3>Wallet A</h3>
+    <button id="genA">Generate</button>
+    <input id="addrA" placeholder="address" readonly>
+    <textarea id="pubA" rows="4" placeholder="public key" readonly></textarea>
+  </div>
 
-<div class="wallet">
-<h3>Wallet B</h3>
-<button id="genB">Generate</button>
-<input id="addrB" placeholder="address">
-<textarea id="pubB" rows="4" placeholder="public key"></textarea>
-</div>
+  <div class="wallet">
+    <h3>Wallet B</h3>
+    <button id="genB">Generate</button>
+    <input id="addrB" placeholder="address" readonly>
+    <textarea id="pubB" rows="4" placeholder="public key" readonly></textarea>
+  </div>
 
 </div>
 
 <hr>
 
 <input id="note" placeholder="note_id">
+
+<div class="meta">
+  <button id="loadNote">Load Note Metadata</button>
+  <input id="denom" placeholder="denom" readonly>
+  <input id="owner" placeholder="current owner" readonly>
+</div>
 
 <button id="AtoB">Transfer A → B</button>
 <button id="BtoA">Transfer B → A</button>
@@ -86,163 +110,226 @@ margin-top:10px;
 <pre id="out"></pre>
 
 <script>
+const genA = document.getElementById("genA");
+const genB = document.getElementById("genB");
 
-const genA = document.getElementById("genA")
-const genB = document.getElementById("genB")
+const AtoB = document.getElementById("AtoB");
+const BtoA = document.getElementById("BtoA");
 
-const AtoB = document.getElementById("AtoB")
-const BtoA = document.getElementById("BtoA")
+const ping = document.getElementById("ping");
+const stop = document.getElementById("stop");
 
-const ping = document.getElementById("ping")
-const stop = document.getElementById("stop")
+const loadNoteBtn = document.getElementById("loadNote");
 
-const out = document.getElementById("out")
+const noteEl = document.getElementById("note");
+const denomEl = document.getElementById("denom");
+const ownerEl = document.getElementById("owner");
+const out = document.getElementById("out");
 
-let A = {}
-let B = {}
+let A = {};
+let B = {};
+let running = false;
 
-let running = false
+function writeOut(value){
+  out.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
 
+function requireWallet(wallet, label){
+  if (!wallet.kp || !wallet.addr || !wallet.pem) {
+    throw new Error(`${label} is not generated yet.`);
+  }
+}
 
 function b64(buf){
-let s=""
-for(const b of new Uint8Array(buf)) s+=String.fromCharCode(b)
-return btoa(s)
+  let s = "";
+  for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
+  return btoa(s);
 }
-
 
 async function sha256(buf){
-const h = await crypto.subtle.digest("SHA-256",buf)
-return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")
+  const h = await crypto.subtle.digest("SHA-256", buf);
+  return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
-
 
 async function address(pub){
-
-const spki = await crypto.subtle.exportKey("spki",pub)
-
-const hex = await sha256(spki)
-
-return "KU1"+hex.slice(0,40)
-
+  const spki = await crypto.subtle.exportKey("spki", pub);
+  const hex = await sha256(spki);
+  return "KU1" + hex.slice(0, 40);
 }
-
 
 async function pem(pub){
-
-const spki = await crypto.subtle.exportKey("spki",pub)
-
-const base = b64(spki).match(/.{1,64}/g).join("\n")
-
-return `-----BEGIN PUBLIC KEY-----
-${base}
------END PUBLIC KEY-----`
-
+  const spki = await crypto.subtle.exportKey("spki", pub);
+  const lines = b64(spki).match(/.{1,64}/g) || [];
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join("\n")}\n-----END PUBLIC KEY-----`;
 }
 
+async function generate(wallet, addrField, pubField){
+  wallet.kp = await crypto.subtle.generateKey(
+    { name:"Ed25519" },
+    true,
+    ["sign","verify"]
+  );
 
-async function generate(wallet,addrField,pubField){
+  wallet.addr = await address(wallet.kp.publicKey);
+  wallet.pem = await pem(wallet.kp.publicKey);
 
-wallet.kp = await crypto.subtle.generateKey(
-{name:"Ed25519"},
-true,
-["sign","verify"]
-)
+  document.getElementById(addrField).value = wallet.addr;
+  document.getElementById(pubField).value = wallet.pem;
 
-wallet.addr = await address(wallet.kp.publicKey)
-wallet.pem = await pem(wallet.kp.publicKey)
-
-document.getElementById(addrField).value = wallet.addr
-document.getElementById(pubField).value = wallet.pem
-
+  writeOut(`${addrField === "addrA" ? "Wallet A" : "Wallet B"} generated.`);
 }
 
-
-genA.addEventListener("click", ()=>generate(A,"addrA","pubA"))
-genB.addEventListener("click", ()=>generate(B,"addrB","pubB"))
-
+genA.addEventListener("click", () => generate(A, "addrA", "pubA"));
+genB.addEventListener("click", () => generate(B, "addrB", "pubB"));
 
 function now(){
-return Math.floor(Date.now()/1000)
+  return Math.floor(Date.now() / 1000);
 }
 
+async function loadNoteMetadata(){
+  const note_id = noteEl.value.trim();
 
-async function transfer(from,to){
+  if (!note_id) {
+    throw new Error("Paste note_id first.");
+  }
 
-const note = document.getElementById("note").value
+  const r = await fetch(`/.netlify/functions/note-read?note_id=${encodeURIComponent(note_id)}`);
+  const text = await r.text();
 
-if(!note){
-alert("Paste note_id")
-return
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`note-read returned non-JSON: ${text}`);
+  }
+
+  if (!r.ok) {
+    throw new Error(data.error || "Failed to load note metadata.");
+  }
+
+  denomEl.value = data.denom ?? "";
+  ownerEl.value = data.current_owner ?? "";
+
+  return data;
 }
 
-const nonce = Math.random().toString(36).slice(2)
+loadNoteBtn.addEventListener("click", async () => {
+  try {
+    const data = await loadNoteMetadata();
+    writeOut(data);
+  } catch (err) {
+    writeOut({ error: err.message });
+  }
+});
 
-const ts = now()
+async function transfer(from, to, fromLabel){
+  requireWallet(from, fromLabel);
+  requireWallet(to, to === A ? "Wallet A" : "Wallet B");
 
-const msg = `KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`
+  const note = noteEl.value.trim();
+  if (!note) {
+    throw new Error("Paste note_id.");
+  }
 
+  const meta = await loadNoteMetadata();
+  const denom = Number(meta.denom);
 
-const sig = await crypto.subtle.sign(
-{name:"Ed25519"},
-from.kp.privateKey,
-new TextEncoder().encode(msg)
-)
+  if (!Number.isFinite(denom) || denom <= 0) {
+    throw new Error("Invalid denom returned by note-read.");
+  }
 
+  if (meta.current_owner && meta.current_owner !== from.addr) {
+    throw new Error(
+      `${fromLabel} is not current owner. ` +
+      `Ledger owner is ${meta.current_owner}`
+    );
+  }
 
-const body = {
+  const nonce = Math.random().toString(36).slice(2);
+  const ts = now();
 
-note_id: note,
-from: from.addr,
-to: to.addr,
-denom: 1,
-ts,
-nonce,
-from_public_key_pem: from.pem,
-signature_b64: b64(sig)
+  const msg = `KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`;
 
+  const sig = await crypto.subtle.sign(
+    { name:"Ed25519" },
+    from.kp.privateKey,
+    new TextEncoder().encode(msg)
+  );
+
+  const body = {
+    note_id: note,
+    from: from.addr,
+    to: to.addr,
+    denom,
+    ts,
+    nonce,
+    from_public_key_pem: from.pem,
+    signature_b64: b64(sig)
+  };
+
+  const r = await fetch("/.netlify/functions/ledger-submit", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+
+  const text = await r.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    writeOut(text);
+    return;
+  }
+
+  writeOut(data);
+
+  if (r.ok) {
+    denomEl.value = String(denom);
+    ownerEl.value = to.addr;
+  }
 }
 
+AtoB.addEventListener("click", async () => {
+  try {
+    await transfer(A, B, "Wallet A");
+  } catch (err) {
+    writeOut({ error: err.message });
+  }
+});
 
-const r = await fetch("/.netlify/functions/ledger-submit",{
+BtoA.addEventListener("click", async () => {
+  try {
+    await transfer(B, A, "Wallet B");
+  } catch (err) {
+    writeOut({ error: err.message });
+  }
+});
 
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify(body)
+ping.addEventListener("click", async () => {
+  running = true;
+  writeOut("Ping pong started.");
 
-})
+  while (running) {
+    try {
+      await transfer(A, B, "Wallet A");
+      await new Promise(r => setTimeout(r, 1200));
+      if (!running) break;
 
+      await transfer(B, A, "Wallet B");
+      await new Promise(r => setTimeout(r, 1200));
+    } catch (err) {
+      writeOut({ error: err.message });
+      running = false;
+    }
+  }
+});
 
-out.textContent = await r.text()
-
-}
-
-
-AtoB.addEventListener("click", ()=>transfer(A,B))
-BtoA.addEventListener("click", ()=>transfer(B,A))
-
-
-ping.addEventListener("click", async ()=>{
-
-running = true
-
-while(running){
-
-await transfer(A,B)
-await new Promise(r=>setTimeout(r,1200))
-
-if(!running) break
-
-await transfer(B,A)
-await new Promise(r=>setTimeout(r,1200))
-
-}
-
-})
-
-
-stop.addEventListener("click", ()=>running=false)
-
+stop.addEventListener("click", () => {
+  running = false;
+  writeOut("Ping pong stopped.");
+});
 </script>
 
 </body>
