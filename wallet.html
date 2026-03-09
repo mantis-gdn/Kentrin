@@ -2,36 +2,91 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Kentrin Wallet</title>
+<title>Kentrin Dev Tool</title>
 
 <style>
-body{background:#000;color:#e6e6e6;font-family:system-ui;max-width:650px;margin:auto;padding:20px}
-input,textarea,button{width:100%;margin:8px 0;padding:10px;background:#111;color:#e6e6e6;border:1px solid #333;border-radius:6px;font-family:monospace}
-pre{background:#111;padding:10px;border-radius:6px}
+body{
+ background:#000;
+ color:#e6e6e6;
+ font-family:system-ui;
+ max-width:900px;
+ margin:auto;
+ padding:20px;
+}
+
+.row{
+ display:flex;
+ gap:20px;
+}
+
+.wallet{
+ flex:1;
+ border:1px solid #333;
+ padding:15px;
+ border-radius:10px;
+ background:#0b0b0b;
+}
+
+input,textarea,button{
+ width:100%;
+ margin:6px 0;
+ padding:10px;
+ background:#111;
+ color:#e6e6e6;
+ border:1px solid #333;
+ border-radius:6px;
+ font-family:monospace;
+}
+
+button{cursor:pointer}
+
+.controls{
+ margin-top:20px;
+}
+
+pre{
+ background:#111;
+ padding:10px;
+ border-radius:6px;
+}
 </style>
 </head>
 
 <body>
 
-<h2>Kentrin Wallet</h2>
+<h1>Kentrin Dev Tool</h1>
 
-<button id="gen">Generate Wallet</button>
+<div class="row">
 
-<input id="addr" placeholder="address" readonly>
-<textarea id="pub" placeholder="public key"></textarea>
+<div class="wallet">
+<h3>Wallet A</h3>
+<button id="genA">Generate</button>
+<input id="addrA" placeholder="address">
+<textarea id="pubA" rows="4" placeholder="public key"></textarea>
+</div>
+
+<div class="wallet">
+<h3>Wallet B</h3>
+<button id="genB">Generate</button>
+<input id="addrB" placeholder="address">
+<textarea id="pubB" rows="4" placeholder="public key"></textarea>
+</div>
+
+</div>
 
 <hr>
 
 <input id="note" placeholder="note_id">
-<input id="to" placeholder="recipient address">
-<input id="nonce" value="test123">
 
-<button id="sign">Sign</button>
+<div class="controls">
 
-<textarea id="msg" placeholder="canonical message"></textarea>
-<textarea id="sig" placeholder="signature"></textarea>
+<button id="AtoB">Transfer A → B</button>
+<button id="BtoA">Transfer B → A</button>
 
-<button id="send">Send</button>
+<button id="ping">Start Ping Pong</button>
+<button id="stop">Stop</button>
+
+</div>
 
 <pre id="out"></pre>
 
@@ -39,7 +94,8 @@ pre{background:#111;padding:10px;border-radius:6px}
 
 const $=id=>document.getElementById(id)
 
-let kp,ts
+let A={},B={}
+let loop=false
 
 const now=()=>Math.floor(Date.now()/1000)
 
@@ -56,8 +112,8 @@ const b64=b=>{
 
 const addr=async pub=>{
  const spki=await crypto.subtle.exportKey("spki",pub)
- const h=await sha256(spki)
- return "KU1"+h.slice(0,40)
+ const hex=await sha256(spki)
+ return "KU1"+hex.slice(0,40)
 }
 
 const pem=async pub=>{
@@ -66,45 +122,45 @@ const pem=async pub=>{
  return `-----BEGIN PUBLIC KEY-----\n${base}\n-----END PUBLIC KEY-----`
 }
 
-document.addEventListener("DOMContentLoaded",()=>{
+async function gen(wallet,addrField,pubField){
 
-$("#gen").onclick=async()=>{
- kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])
- $("#addr").value=await addr(kp.publicKey)
- $("#pub").value=await pem(kp.publicKey)
+ wallet.kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])
+
+ const address=await addr(wallet.kp.publicKey)
+ const p=await pem(wallet.kp.publicKey)
+
+ $(addrField).value=address
+ $(pubField).value=p
+
+ wallet.addr=address
+ wallet.pem=p
 }
 
-$("#sign").onclick=async()=>{
+$("#genA").onclick=()=>gen(A,"addrA","pubA")
+$("#genB").onclick=()=>gen(B,"addrB","pubB")
+
+async function transfer(from,to){
+
  const note=$("#note").value
- const from=$("#addr").value
- const to=$("#to").value
- const nonce=$("#nonce").value
+ const nonce=Math.random().toString(36).slice(2)
+ const ts=now()
 
- ts=now()
-
- const msg=`KU|v1|TRANSFER|${note}|${from}|${to}|${ts}|${nonce}`
-
- $("#msg").value=msg
+ const msg=`KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`
 
  const sig=await crypto.subtle.sign(
   {name:"Ed25519"},
-  kp.privateKey,
+  from.kp.privateKey,
   new TextEncoder().encode(msg)
  )
 
- $("#sig").value=b64(sig)
-}
-
-$("#send").onclick=async()=>{
-
  const body={
-  note_id:$("#note").value,
-  from:$("#addr").value,
-  to:$("#to").value,
+  note_id:note,
+  from:from.addr,
+  to:to.addr,
   ts,
-  nonce:$("#nonce").value,
-  from_public_key_pem:$("#pub").value,
-  signature_b64:$("#sig").value
+  nonce,
+  from_public_key_pem:from.pem,
+  signature_b64:b64(sig)
  }
 
  const r=await fetch("/.netlify/functions/ledger-submit",{
@@ -113,10 +169,33 @@ $("#send").onclick=async()=>{
   body:JSON.stringify(body)
  })
 
- $("#out").textContent=await r.text()
+ const text=await r.text()
+
+ $("#out").textContent=text
 }
 
-})
+$("#AtoB").onclick=()=>transfer(A,B)
+$("#BtoA").onclick=()=>transfer(B,A)
+
+$("#ping").onclick=async()=>{
+
+ loop=true
+
+ while(loop){
+
+  await transfer(A,B)
+  await new Promise(r=>setTimeout(r,1200))
+
+  if(!loop)break
+
+  await transfer(B,A)
+  await new Promise(r=>setTimeout(r,1200))
+
+ }
+
+}
+
+$("#stop").onclick=()=>loop=false
 
 </script>
 
