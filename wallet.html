@@ -1,54 +1,53 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>Kentrin Dev Tool</title>
 
 <style>
+
 body{
- background:#000;
- color:#e6e6e6;
- font-family:system-ui;
- max-width:900px;
- margin:auto;
- padding:20px;
+background:#000;
+color:#e6e6e6;
+font-family:system-ui;
+max-width:900px;
+margin:auto;
+padding:20px;
 }
 
 .row{
- display:flex;
- gap:20px;
+display:flex;
+gap:20px;
 }
 
 .wallet{
- flex:1;
- border:1px solid #333;
- padding:15px;
- border-radius:10px;
- background:#0b0b0b;
+flex:1;
+border:1px solid #333;
+padding:15px;
+border-radius:10px;
+background:#0b0b0b;
 }
 
 input,textarea,button{
- width:100%;
- margin:6px 0;
- padding:10px;
- background:#111;
- color:#e6e6e6;
- border:1px solid #333;
- border-radius:6px;
- font-family:monospace;
+width:100%;
+margin:6px 0;
+padding:10px;
+background:#111;
+color:#e6e6e6;
+border:1px solid #333;
+border-radius:6px;
+font-family:monospace;
 }
 
 button{cursor:pointer}
 
-.controls{
- margin-top:20px;
+pre{
+background:#111;
+padding:10px;
+border-radius:6px;
+margin-top:15px;
 }
 
-pre{
- background:#111;
- padding:10px;
- border-radius:6px;
-}
 </style>
 </head>
 
@@ -78,100 +77,121 @@ pre{
 
 <input id="note" placeholder="note_id">
 
-<div class="controls">
-
 <button id="AtoB">Transfer A → B</button>
 <button id="BtoA">Transfer B → A</button>
 
 <button id="ping">Start Ping Pong</button>
 <button id="stop">Stop</button>
 
-</div>
-
 <pre id="out"></pre>
 
 <script>
 
-const $=id=>document.getElementById(id)
+document.addEventListener("DOMContentLoaded", () => {
 
-let A={},B={}
+const $ = id => document.getElementById(id)
+
+let A={}
+let B={}
 let loop=false
 
-const now=()=>Math.floor(Date.now()/1000)
-
-const sha256=async b=>{
- const h=await crypto.subtle.digest("SHA-256",b)
- return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")
+function now(){
+return Math.floor(Date.now()/1000)
 }
 
-const b64=b=>{
- let s=""
- for(const c of new Uint8Array(b))s+=String.fromCharCode(c)
- return btoa(s)
+function b64(buffer){
+let binary=""
+const bytes=new Uint8Array(buffer)
+for(let b of bytes){binary+=String.fromCharCode(b)}
+return btoa(binary)
 }
 
-const addr=async pub=>{
- const spki=await crypto.subtle.exportKey("spki",pub)
- const hex=await sha256(spki)
- return "KU1"+hex.slice(0,40)
+async function sha256(buf){
+const hash=await crypto.subtle.digest("SHA-256",buf)
+return [...new Uint8Array(hash)]
+.map(b=>b.toString(16).padStart(2,"0"))
+.join("")
 }
 
-const pem=async pub=>{
- const spki=await crypto.subtle.exportKey("spki",pub)
- const base=b64(spki).match(/.{1,64}/g).join("\n")
- return `-----BEGIN PUBLIC KEY-----\n${base}\n-----END PUBLIC KEY-----`
+async function addressFromPub(pub){
+const spki=await crypto.subtle.exportKey("spki",pub)
+const hex=await sha256(spki)
+return "KU1"+hex.slice(0,40)
 }
 
-async function gen(wallet,addrField,pubField){
+async function pemFromPub(pub){
 
- wallet.kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])
+const spki=await crypto.subtle.exportKey("spki",pub)
 
- const address=await addr(wallet.kp.publicKey)
- const p=await pem(wallet.kp.publicKey)
+const base64=b64(spki)
+.match(/.{1,64}/g)
+.join("\n")
 
- $(addrField).value=address
- $(pubField).value=p
+return `-----BEGIN PUBLIC KEY-----
+${base64}
+-----END PUBLIC KEY-----`
 
- wallet.addr=address
- wallet.pem=p
 }
 
-$("#genA").onclick=()=>gen(A,"addrA","pubA")
-$("#genB").onclick=()=>gen(B,"addrB","pubB")
+async function generate(wallet,addrField,pubField){
+
+wallet.kp=await crypto.subtle.generateKey(
+{name:"Ed25519"},
+true,
+["sign","verify"]
+)
+
+wallet.addr=await addressFromPub(wallet.kp.publicKey)
+wallet.pem=await pemFromPub(wallet.kp.publicKey)
+
+$(addrField).value=wallet.addr
+$(pubField).value=wallet.pem
+
+}
+
+$("#genA").onclick=()=>generate(A,"addrA","pubA")
+$("#genB").onclick=()=>generate(B,"addrB","pubB")
 
 async function transfer(from,to){
 
- const note=$("#note").value
- const nonce=Math.random().toString(36).slice(2)
- const ts=now()
+const note=$("#note").value
 
- const msg=`KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`
+if(!note){
+alert("paste a note_id")
+return
+}
 
- const sig=await crypto.subtle.sign(
-  {name:"Ed25519"},
-  from.kp.privateKey,
-  new TextEncoder().encode(msg)
- )
+const nonce=Math.random().toString(36).slice(2)
+const ts=now()
 
- const body={
-  note_id:note,
-  from:from.addr,
-  to:to.addr,
-  ts,
-  nonce,
-  from_public_key_pem:from.pem,
-  signature_b64:b64(sig)
- }
+const msg=`KU|v1|TRANSFER|${note}|${from.addr}|${to.addr}|${ts}|${nonce}`
 
- const r=await fetch("/.netlify/functions/ledger-submit",{
-  method:"POST",
-  headers:{"Content-Type":"application/json"},
-  body:JSON.stringify(body)
- })
+const sig=await crypto.subtle.sign(
+{name:"Ed25519"},
+from.kp.privateKey,
+new TextEncoder().encode(msg)
+)
 
- const text=await r.text()
+const body={
+note_id:note,
+from:from.addr,
+to:to.addr,
+ts,
+nonce,
+from_public_key_pem:from.pem,
+signature_b64:b64(sig)
+}
 
- $("#out").textContent=text
+const r=await fetch("/.netlify/functions/ledger-submit",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(body)
+})
+
+const text=await r.text()
+
+$("#out").textContent=text
+
 }
 
 $("#AtoB").onclick=()=>transfer(A,B)
@@ -179,23 +199,25 @@ $("#BtoA").onclick=()=>transfer(B,A)
 
 $("#ping").onclick=async()=>{
 
- loop=true
+loop=true
 
- while(loop){
+while(loop){
 
-  await transfer(A,B)
-  await new Promise(r=>setTimeout(r,1200))
+await transfer(A,B)
+await new Promise(r=>setTimeout(r,1200))
 
-  if(!loop)break
+if(!loop)break
 
-  await transfer(B,A)
-  await new Promise(r=>setTimeout(r,1200))
+await transfer(B,A)
+await new Promise(r=>setTimeout(r,1200))
 
- }
+}
 
 }
 
 $("#stop").onclick=()=>loop=false
+
+})
 
 </script>
 
